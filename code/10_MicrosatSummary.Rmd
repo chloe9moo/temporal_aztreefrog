@@ -1,0 +1,256 @@
+---
+title: "Summary of Microsat Data"
+author: "C. E. Moore"
+output: pdf_document
+---
+Last updated on `r Sys.Date()`  
+*Note: Microsat data previously formatted from geneious output using 01a_DataPrep.R*  
+
+**Contents:**  
+1. Information on missing data for individuals and loci  
+2. Basic pop. gen. stats of microsats  
+3. Testing for deviations from HWE  
+4. Checking for linkage disequilibrium  
+5. Checking for null alleles  
+```{r paths and data load, echo=FALSE, message=FALSE, warning=FALSE}
+# packages
+library(adegenet); library(ape); library(pegas); library(ggplot2); library(knitr); library(tidyverse); library(poppr); library(PopGenReport)
+
+# home
+PATH <- "/home/chloe9mo/Documents/Projects/temporal_aztreefrog"
+
+# in
+## aztf
+aztf <- read.csv(paste0(PATH, "/microsat_data/combined_aztf_loci_nosibs.csv"))
+# aztf <- read.csv(paste0(PATH, "/microsat_data/combined_aztf_loci.csv"))
+#to subset things!
+# pop_aztf[, loc="Hwri23452"]
+```
+**Loaded packages:** `r (.packages())`  
+
+***  
+
+# Summary of missing data  
+``` {r missing data, echo=FALSE, message=FALSE}
+# loci missing
+pct.loci.na <- lapply(aztf, function(x) 
+  round((length(which(x=='-1/-1'))/length(x)*100),3)) %>% 
+  bind_cols()
+
+# indiv missing
+pct.ind.na <- as.data.frame(apply(aztf[,c(6:22)], 1, function(x) { sum(x=='-1/-1')/length(x)*100 }))
+pct.ind.na[c("ID","year")] <- aztf[,c("ID","year")]
+names(pct.ind.na) <- c("pct_na", "ID", "year")
+pct.ind.na <- pct.ind.na[,c(2,3,1)]
+
+kable(pct.ind.na %>% arrange(desc(pct_na)) %>% slice_head(n=10), caption = "Percent missing data for top 10 individuals")
+cat("\n")
+kable(pct.loci.na %>% select(!c(1:5)) %>% pivot_longer(cols = everything(), names_to = "loci", values_to = "pct_na"), caption = "Percent missing data for all loci")
+
+## remove high missing individuals + and low n pops
+aztf <- aztf %>%
+  merge(., pct.ind.na) %>%
+  filter(pct_na < 25) %>% #Mims et al removed ind with >25% missing data
+  select(-pct_na) %>% 
+  group_by(pop) %>% filter(n() > 5) #remove small n populations
+write.csv(aztf, file = paste0(PATH, "/microsat_data/final_aztf_loci_nosibs.csv"), row.names = F)
+# write.csv(aztf, file = paste0(PATH, "/microsat_data/final_aztf_loci_sibs.csv"), row.names = F)
+
+rm(pct.ind.na, pct.loci.na)
+```
+**Note:** Filtered out individuals w/ > 25% missing data and filtered out populations with < 5 individuals.  
+
+``` {r load in data lists, echo=FALSE, message=FALSE}
+source(file = paste0(PATH, "/code/01c_DataLoad.R"))
+```
+***
+
+# Sampling summary numbers  
+  
+``` {r sample summary, echo=FALSE, message=FALSE}
+sumdat <- aztf %>% select(year, pop) %>%
+  count(year, pop) %>%
+  pivot_wider(id_cols=pop, names_from = year, values_from=n) %>%
+  replace(is.na(.), 0) %>%
+  mutate(TotSamp = rowSums(across(.cols = c('2014','2019','2021'))))
+
+kable(sumdat, caption = "Population sample summary")
+cat("Population sample range post filter is", min(sumdat[,2:4][sumdat[,2:4] > 0]), "-", max(sumdat[,2:4][sumdat[,2:4] > 0]), "\n",
+    "Population sample mean post filter is", mean(sumdat[,2:4][sumdat[,2:4] > 0]), "\n")
+```
+***
+
+# Basic pop. gen. summary of microsats  
+```{r ind data summary, echo=FALSE, warning=FALSE}
+kable(
+(aztf %>% group_by(year, pop) %>% 
+  summarise(Sum = n()) %>% tidyr::spread(pop, Sum, fill = 0) %>% 
+  mutate(total = rowSums(across(everything())))), caption = "N individuals per pop + year post filter and sibling removal"
+)
+
+cat("Individual Summaries", "\n")
+for (i in 1:length(ind.list)) {
+  
+  cat("--------------------------------------------", "\n", ind.names[[i]])
+  print(summary(ind.list[[i]]))
+  cat("--------------------------------------------", "\n")
+  
+}
+
+cat("Population Summaries", "\n")
+for (i in 1:length(pop.list)) {
+  
+  cat("--------------------------------------------","\n",pop.names[[i]])
+  print(summary(pop.list[[i]]))
+  cat("--------------------------------------------","\n")
+  
+}
+  
+```
+
+```{r obj summary plots, echo=FALSE}
+summ.list <- lapply(ind.list, summary)
+
+par(mfrow=c(2,2))
+plot(summ.list[[1]]$n.by.pop, summ.list[[1]]$pop.n.all, xlab="Colonies sample size",
+ylab="N alleles",main="Alleles numbers x sample sizes", type="n")
+
+text(summ.list[[1]]$n.by.pop, summ.list[[1]]$pop.n.all, lab=names(summ.list[[1]]$n.by.pop))
+
+barplot(summ.list[[1]]$loc.n.all, ylab="N alleles", main="N alleles per locus")
+
+barplot(summ.list[[1]]$Hexp-summ.list[[1]]$Hobs, main="Heterozygosity: exp-obs", ylab="Hexp - Hobs")
+
+barplot(summ.list[[1]]$n.by.pop, main="Pop sample size by pop", ylab="Number of genotypes",las=3)
+
+barplot(summ.list[[2]]$n.by.pop, main="Pop sample size by year", ylab="Number of genotypes",las=3)
+```
+  
+**Is mean observed H significantly lower than mean expected H?**  
+Null hypothesis being that there is no difference, so sig. p means reject the null of no diff    
+*Both global sets should be the same.*  
+``` {r He v Ho ttest, echo=FALSE}
+
+for (i in 1:length(summ.list)) {
+  
+  cat(ind.names[[i]], "\n")
+  print(
+  t.test(summ.list[[i]]$Hexp, summ.list[[i]]$Hobs, pair=T, var.equal=TRUE, alter="greater")
+  )
+  cat("----------------------------------------", "\n")
+  
+}
+
+cat("for funsies: compare obs. heterozygosity between years", "\n",
+    "2019 vs 2015")
+t.test(summ.list[[3]]$Hobs, summ.list[[4]]$Hobs, pair=T, var.equal=TRUE, alter="greater")
+cat("----------------------------------------", "\n", "2015 vs 2021")
+t.test(summ.list[[3]]$Hobs, summ.list[[5]]$Hobs, pair=T, var.equal=TRUE, alter="greater")
+cat("----------------------------------------", "\n", "2019 vs 2021")
+t.test(summ.list[[4]]$Hobs, summ.list[[5]]$Hobs, pair=T, var.equal=TRUE, alter="greater")
+
+```
+**Notes:** Yes, Hobs is sig. lower than Hexp in global, 2019, and 2015 sets, not so much in 2021  
+*Diversity likely not sig. different between years though!*  
+
+***  
+# Testing for HWE  
+#### Global HWE  
+
+*1000 bootstrap MC*  
+``` {r global HWE, message=FALSE, echo=FALSE}
+globalHWE.list <- lapply(ind.list, function(x) {
+  globalHWE <- round(hw.test(x, B = 1000), digits = 3)
+  globalHWE <- as.data.frame(globalHWE)
+})
+globalHWE.list <- globalHWE.list[c(1,3:5)] #don't need the grouped by years set
+globalHWE <- bind_cols(globalHWE.list)
+cols <- c("yrs_chi2", "yrs_df", "yrs_PrChi2", "yrs_PrExact",
+          "y15_chi2", "y15_df", "y15_PrChi2", "y15_PrExact",
+          "y19_chi2", "y19_df", "y19_PrChi2", "y19_PrExact",
+          "y21_chi2", "y21_df", "y21_PrChi2", "y21_PrExact")
+names(globalHWE) <- cols
+
+kable(globalHWE[,c(1:4)], caption = "Global HWE across all years")
+kable(globalHWE[,c(5:8)], caption = "Global HWE in 2015")
+kable(globalHWE[,c(9:12)], caption = "Global HWE in 2019")
+kable(globalHWE[,c(13:16)], caption = "Global HWE in 2021")
+```
+**Notes:** Most loci out of HWE except primarily for hwri34484, hwri4269, hwri2932 across years and in 2015, but 2019 and 2021 have several loci not?  
+
+#### HWE by Pop / Yr  
+*alpha = 0.05*  
+``` {r, echo=F}
+alpha <- 0.05
+for (i in 1:length(ind.list)) {
+  
+  ## monte carlo
+  pop.hwt <- data.frame(sapply(seppop(ind.list[[i]]), function(ls) pegas::hw.test(ls, B=1000)[,4]))
+  pop.hwt <- t(data.matrix(pop.hwt))
+  ## chi sq
+  pop.hwt.chi <- data.frame(sapply(seppop(ind.list[[i]]), function(ls) pegas::hw.test(ls, B=0)[,3]))
+  pop.hwt.chi <- t(data.matrix(pop.hwt.chi))
+  #false discovery rate
+  Chisq.fdr <- matrix(p.adjust(pop.hwt.chi, method="fdr"), nrow=nrow(pop.hwt.chi))
+  MC.fdr <- matrix(p.adjust(pop.hwt, method="fdr"), nrow=nrow(pop.hwt))
+  
+  #consolidate in table
+  pop.HWE.out <- data.frame(Chisq=round(apply(pop.hwt.chi<alpha, 1, mean), 3),
+                            MC=round(apply(pop.hwt<alpha, 1, mean), 3),
+                            Chisq.fdr=round(apply(Chisq.fdr<alpha, 1, mean), 3),
+                            MC.fdr=round(apply(MC.fdr<alpha, 1, mean), 3))
+  loc.HWE.out <- data.frame(Chisq=round(apply(pop.hwt.chi<alpha, 2, mean), 3),
+                            MC=round(apply(pop.hwt<alpha, 2, mean), 3),
+                            Chisq.fdr=round(apply(Chisq.fdr<alpha, 2, mean), 3),
+                            MC.fdr=round(apply(MC.fdr<alpha, 2, mean), 3))
+  print(kable(pop.HWE.out, caption=paste0(ind.names[[i]], " Prop. loci per group out of HWE")))
+  cat("\n")
+  print(kable(loc.HWE.out, caption=paste0(ind.names[[i]], " Prop. groups per locus out of HWE")))
+  cat("-------------------------------------------", "\n")
+  
+}
+
+rm(pop.hwt, pop.hwt.chi, alpha, Chisq.fdr, MC.fdr)
+```
+**Notes:** Doesn't seem to be any population or loci consistently out of HWE, but 2015 in the year grouping seems high? hwri30594 highest across all years + groups, but I think correcting for fdr shows it's not a concern.  
+
+***
+
+# Testing for Linkage Disequilibrium  
+Testing for linkage disequilibrium on microsats, where we don't know where on the genome they are located, for each pair of loci, by checking whether alleles of two loci are statistically associated.  
+
+#### Overall LD test  
+Null hypothesis is that there is no linkage among a set of markers.  
+
+``` {r, echo=F}
+for (i in 2:length(ind.list)) { #first two are the same, so starting on second
+  
+  cat(ind.names[[i]], " - Linkage Disequilibrium")
+  LD <- poppr::ia(ind.list[[i]], sample = 199)
+  LD.pair <- poppr::pair.ia(ind.list[[i]])
+  print(LD)
+  cat("\n")
+  print(as.data.frame(LD.pair) %>% slice_max(rbarD, n=5))
+  cat("\n", "==================================================", "\n")
+  
+}
+```
+
+**Notes:** hwri20812 and hwri30594 seem to be the most consistently linked, but at 0.15/0.16, is that concerningly high? Or low enough to move on? I think low enough to move on based on https://blog.goldenhelix.com/determining-best-ld-pruning-options/  
+
+***
+
+# Check for Null Alleles  
+**From LG DGS:** "*One potential drawback for microsatellites as molecular markers is the presence of null alleles that fail to amplify, thus they couldn’t be detected in the PCR assays*"  
+**From the help file:** “Brookfield (1996) provides a brief discussion on which estimator should be used. In summary, it was recommended that Chakraborty et al. (1994)’s method (e.g. summary1) be used if there are individuals with no bands at a locus seen, but they are discounted as possible artefacts. If all individuals have one or more bands at a locus then Brookfield (1996)’s method (e.g. summary2) should be used.”
+
+``` {r, echo = F, message = F}
+#only doing it for the full set since it takes awhile, I think that covers everything
+null <- suppressWarnings(PopGenReport::null.all(ind.list[[1]]))
+{cat("Chakraborty et al. 1994:", "\n")
+round(null$null.allele.freq$summary1, 2)}
+{cat("\n", "Brookfield et al. 1996:", "\n")
+round(null$null.allele.freq$summary2, 2)}
+```
+
+**Notes:** It seems like frequency of null alleles in each loci is pretty low, regardless of the method used. The exception might be hwri30594. That's the one that had highest linkage and most often out of HWE.  
