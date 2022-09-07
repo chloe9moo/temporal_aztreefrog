@@ -127,7 +127,7 @@ for (i in 1:length(dapc_l)) {
   
   if ("LD2" %in% colnames(dapc2plot) == FALSE) { 
     
-    
+    #lol
     
     } else {  
 
