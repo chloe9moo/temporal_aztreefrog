@@ -1,0 +1,181 @@
+---
+title: "Spatial Analysis"
+author: "C. E. Moore"
+output: pdf_document
+---
+Last updated on `r Sys.Date()`  
+  
+*Note: Microsat data previously formatted from geneious output using 01a_DataPrep.R and then filtered for missing data in 10_MicrosatSummary.Rmd*  
+
+**Contents:**  
+1. IBD w/ mantel  
+  
+```{r paths and data load, echo=FALSE, message=FALSE}
+## packages
+library(adegenet); library(knitr); library(MASS); library(tidyverse)
+
+## home path
+PATH <- "/home/chloe9mo/Documents/Projects/temporal_aztreefrog"
+
+# gene data
+source(file = paste0(PATH, "/code/01c_DataLoad.R"))
+
+#redo the yr grouping genind
+yr.coord <- coord %>% dplyr::select(year_pop, lon, lat) %>% unique() %>% remove_rownames() %>% column_to_rownames("year_pop")
+
+ind_aztf_yr <- df2genind(aztf[,c(6:22)], sep = "/", ind.names = aztf$ID, NA.char = "-1/-1")
+ind_aztf_yr@pop <- as.factor(aztf$year_pop)
+ind_aztf_yr$other$xy <- subset(yr.coord, rownames(yr.coord) %in% aztf$year_pop) #assign coordinates
+
+ind.list[[2]] <- ind_aztf_yr
+pop.list[[2]] <- genind2genpop(ind_aztf_yr, quiet = T)
+
+rm(yr.coord, ind_aztf_yr)
+```
+**Loaded packages:** `r (.packages())`  
+
+# 1. IBD with Mantel Test
+
+``` {r, echo=F}
+d.gen.l <- vector("list", length = length(pop.list))
+d.geo.l <- vector("list", length = length(pop.list))
+ibd.l <- vector("list", length = length(pop.list))
+
+for (i in 1:length(pop.list)) {
+
+  d.gen <- dist.genpop(pop.list[[i]], method = 1) #euclidean dist
+  d.gen.l[[i]] <- d.gen
+  d.geo <- dist(pop.list[[i]]$other$xy, method = "euclidean")
+  d.geo.l[[i]] <- d.geo
+
+  ibd <- mantel.randtest(d.gen, d.geo)
+
+  cat("\n", "==========================================", "\n", pop.names[[i]], "\n")
+  print(ibd)
+  
+  ibd.l[[i]] <- ibd
+  }
+```
+  
+    
+``` {r ibd fig 1, echo=F, fig.height=5, fig.width=5, fig.align="center"}
+par(mfrow=c(3,2))
+plot(ibd.l[[1]], main=pop.names[[1]])
+plot(ibd.l[[2]], main=pop.names[[2]])
+plot(ibd.l[[3]], main=pop.names[[3]])
+plot(ibd.l[[4]], main=pop.names[[4]])
+plot(ibd.l[[5]], main=pop.names[[5]])
+```
+From adegenet tutorial: Original value of the correlation b/w distance matrices is represented by the dot, while histograms represent permuted values. Significant spatial structure would result in the original value being out of the reference dist.  
+**Notes:** Here, it looks like there is no significant IBD in any of the groupings.. however Mims et al. 2016 found significant IBD so I will need to look into that.  
+  
+##### Now looking at genetic dist x geographic dist scatter plots w/ regression:
+``` {r ibd fig 2, echo=F, fig.height=6, fig.width=7, fig.align="center"}
+par(mfrow=c(3,2))
+plot(d.geo.l[[1]], d.gen.l[[1]], main=pop.names[[1]])
+abline(lm(as.vector(d.gen.l[[1]])~as.vector(d.geo.l[[1]])), col="red", lty=2)
+plot(d.geo.l[[2]], d.gen.l[[2]], main=pop.names[[2]])
+abline(lm(as.vector(d.gen.l[[2]])~as.vector(d.geo.l[[2]])), col="red", lty=2)
+plot(d.geo.l[[3]], d.gen.l[[3]], main=pop.names[[3]])
+abline(lm(as.vector(d.gen.l[[3]])~as.vector(d.geo.l[[3]])), col="red", lty=2)
+plot(d.geo.l[[4]], d.gen.l[[4]], main=pop.names[[4]])
+abline(lm(as.vector(d.gen.l[[4]])~as.vector(d.geo.l[[4]])), col="red", lty=2)
+plot(d.geo.l[[5]], d.gen.l[[5]], main=pop.names[[5]])
+abline(lm(as.vector(d.gen.l[[5]])~as.vector(d.geo.l[[5]])), col="red", lty=2)
+```
+**Notes:** Again, evidence for no significant IBD?  
+  
+##### Add coloration to look at density of points:  
+``` {r ibd fig3, echo=F, fig.height=6, fig.width=7, fig.align="center"}
+myPal <- colorRampPalette(c("white", "blue", "gold", "orange", "red"))
+dens.l <- vector("list", length = length(d.gen.l))
+for (i in 1:length(d.gen.l)) {
+  dens.l[[i]] <- kde2d(as.vector(d.geo.l[[i]]), as.vector(d.gen.l[[i]]), n=300)
+}
+
+par(mfrow=c(3,2))
+plot(d.geo.l[[1]], d.gen.l[[1]], main=pop.names[[1]], pch=20, cex=.5)
+image(dens.l[[1]], col=transp(myPal(300),.7), add=TRUE)
+abline(lm(as.vector(d.gen.l[[1]])~as.vector(d.geo.l[[1]])))
+
+plot(d.geo.l[[2]], d.gen.l[[2]], main=pop.names[[2]], pch=20, cex=.5)
+image(dens.l[[2]], col=transp(myPal(300),.7), add=TRUE)
+abline(lm(as.vector(d.gen.l[[2]])~as.vector(d.geo.l[[2]])))
+
+plot(d.geo.l[[3]], d.gen.l[[3]], main=pop.names[[3]], pch=20, cex=.5)
+image(dens.l[[3]], col=transp(myPal(300),.7), add=TRUE)
+abline(lm(as.vector(d.gen.l[[3]])~as.vector(d.geo.l[[3]])))
+
+plot(d.geo.l[[4]], d.gen.l[[4]], main=pop.names[[4]], pch=20, cex=.5)
+image(dens.l[[4]], col=transp(myPal(300),.7), add=TRUE)
+abline(lm(as.vector(d.gen.l[[4]])~as.vector(d.geo.l[[4]])))
+
+plot(d.geo.l[[5]], d.gen.l[[5]], main=pop.names[[5]], pch=20, cex=.5)
+image(dens.l[[5]], col=transp(myPal(300),.7), add=TRUE)
+abline(lm(as.vector(d.gen.l[[5]])~as.vector(d.geo.l[[5]])))
+```
+**Notes:** From the tutorial, a continuous cloud would be expected under a simulated IBD scenario. These all are mostly continuous, with some blobbing towards upper right of all plots. 2015 plot has a distinct group at the top.  
+
+``` {r, echo=F}
+gd.p <- vector("list", length = length(ind.list))
+for (i in 1:length(ind.list)) {
+  gd.p[[i]] <- as.vector(1 - PopGenReport::pairwise.propShared(ind.list[[i]]))
+}
+
+myPal <- colorRampPalette(c("white", "blue", "gold", "orange", "red"))
+dens.l <- vector("list", length = length(gd.p))
+for (i in 1:length(d.gen.l)) {
+  dens.l[[i]] <- kde2d(as.vector(d.geo.l[[i]]), gd.p[[i]], n=300)
+}
+
+par(mfrow=c(3,2))
+plot(d.geo.l[[1]], gd.p[[1]], main=pop.names[[1]], pch=20, cex=.5)
+image(dens.l[[1]], col=transp(myPal(300),.7), add=TRUE)
+abline(lm(as.vector(gd.p[[1]])~as.vector(d.geo.l[[1]])))
+lines(loess.smooth(d.geo.l[[1]], gd.p[[1]]), col="red")
+
+plot(d.geo.l[[2]], gd.p[[2]], main=pop.names[[2]], pch=20, cex=.5)
+image(dens.l[[2]], col=transp(myPal(300),.7), add=TRUE)
+abline(lm(as.vector(gd.p[[2]])~as.vector(d.geo.l[[2]])))
+lines(loess.smooth(d.geo.l[[2]], gd.p[[2]]), col="red")
+
+plot(d.geo.l[[3]], gd.p[[3]], main=pop.names[[3]], pch=20, cex=.5)
+image(dens.l[[3]], col=transp(myPal(300),.7), add=TRUE)
+abline(lm(as.vector(gd.p[[3]])~as.vector(d.geo.l[[3]])))
+lines(loess.smooth(d.geo.l[[3]], gd.p[[3]]), col="red")
+
+plot(d.geo.l[[4]], gd.p[[4]], main=pop.names[[4]], pch=20, cex=.5)
+image(dens.l[[4]], col=transp(myPal(300),.7), add=TRUE)
+abline(lm(as.vector(gd.p[[4]])~as.vector(d.geo.l[[4]])))
+lines(loess.smooth(d.geo.l[[4]], gd.p[[4]]), col="red")
+
+plot(d.geo.l[[5]], gd.p[[5]], main=pop.names[[5]], pch=20, cex=.5)
+image(dens.l[[5]], col=transp(myPal(300),.7), add=TRUE)
+abline(lm(as.vector(gd.p[[5]])~as.vector(d.geo.l[[5]])))
+lines(loess.smooth(d.geo.l[[5]], gd.p[[5]]), col="red")
+```
+
+``` {r, echo=F}
+ibd.l <- vector("list", length = length(pop.list))
+
+for (i in 1:length(pop.list)) {
+
+  ibd.l[[i]] <- vegan::mantel(d.gen.l[[i]], d.geo.l[[i]], method = "pearson")
+
+  cat("\n", "==========================================", "\n", pop.names[[i]], "\n")
+  print(ibd.l[[i]])
+  
+  }
+
+ibd.log.l <- vector("list", length = length(pop.list))
+
+for (i in 1:length(pop.list)) {
+
+  ibd.log.l[[i]] <- vegan::mantel(d.gen.l[[i]], log(d.geo.l[[i]]), method = "pearson")
+
+  cat("\n", "==========================================", "\n", pop.names[[i]], "log transformed dist", "\n")
+  print(ibd.log.l[[i]])
+  
+  }
+
+```

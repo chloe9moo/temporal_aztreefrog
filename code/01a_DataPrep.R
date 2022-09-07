@@ -396,7 +396,8 @@ write.csv(aztf.s, file=paste0(PATH, "/microsat_data/combined_aztf_loci_nosibs.cs
 
 # NeEstimator prep ----
 library(adegenet)
-aztf <- read.csv(paste0(PATH,"/microsat_data/filtered_aztf_loci.csv"))
+# aztf <- read.csv(paste0(PATH,"/microsat_data/final_aztf_loci_sibs.csv"))
+aztf <- read.csv(paste0(PATH,"/microsat_data/final_aztf_loci_nosibs.csv"))
 microsat <- aztf %>% select(contains("hwri"))
 # microsat <- df2genind(microsat, sep = "/", ind.names = aztf$ID, NA.char = "-1/-1")
 microsat <- microsat %>% 
@@ -406,7 +407,9 @@ microsat["pop"] <- aztf$year_pop
 microsat <- microsat[,c(18,1:17)]
 microsat <- arrange(microsat, pop)
 
-write.table(microsat, file=paste0(PATH,"/microsat_data/Ne_loci_original.txt"), sep = '\t', row.names = F)
+# write.table(microsat, file=paste0(PATH,"/Ne_Estimator/Ne_loci_original_sibs.txt"), sep = '\t', row.names = F)
+write.table(microsat, file=paste0(PATH,"/Ne_Estimator/Ne_loci_original_nosibs.txt"), sep = '\t', row.names = F)
+
 
 # STRUCTURE prep ----
 aztf <- read.csv(paste0(PATH,"/microsat_data/filtered_aztf_loci.csv"))

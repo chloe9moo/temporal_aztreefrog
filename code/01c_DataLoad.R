@@ -14,7 +14,7 @@ ind_aztf_pop$other$xy <- subset(pop.coord, rownames(pop.coord) %in% aztf$pop) #a
 
 ind_aztf_yr <- df2genind(aztf[,c(6:22)], sep = "/", ind.names = aztf$ID, NA.char = "-1/-1")
 ind_aztf_yr@pop <- as.factor(aztf$year)
-# set coordinates in the script
+ind_aztf_yr$other$xy <- data.frame(lon = c(2014, 2019, 2021), lat = c(1,1,1))
 
 o.2015 <- aztf %>% filter(year == '2014')
 ind2015 <- df2genind(o.2015[,c(6:22)], sep = "/", ind.names = o.2015$ID, NA.char = "-1/-1")

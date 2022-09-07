@@ -1,0 +1,179 @@
+# STRUCTURE like plot creation
+library(tidyverse); library(adegenet); library(ggpubr)
+# library(ggh4x); library(paletteer); library(cowplot)
+
+#set up ----
+##home path
+PATH <- "/home/chloe9mo/Documents/Projects/temporal_aztreefrog"
+
+##load data
+source(file = paste0(PATH, "/code/01c_DataLoad.R"))
+
+#redo the yr grouping genind
+yr.coord <- coord %>% dplyr::select(year_pop, lon, lat) %>% unique() %>% remove_rownames() %>% column_to_rownames("year_pop")
+
+ind_aztf_yr <- df2genind(aztf[,c(6:22)], sep = "/", ind.names = aztf$ID, NA.char = "-1/-1")
+ind_aztf_yr@pop <- as.factor(aztf$year_pop)
+ind_aztf_yr$other$xy <- subset(yr.coord, rownames(yr.coord) %in% aztf$year_pop) #assign coordinates
+
+ind.list[[6]] <- ind_aztf_yr
+pop.list[[6]] <- genind2genpop(ind_aztf_yr, quiet = T)
+ind.names[[6]] <- "Year_Pop"
+pop.names[[6]] <- "Year_Pop"
+
+rm(yr.coord, ind_aztf_yr)
+
+#find clusters ----
+#will need to do this one by one
+p <- 4 #select set to run
+
+#no real reason to choose low number of pc's
+grp <- find.clusters(ind.list[[p]], max.n.clust = length(levels(ind.list[[p]]@pop))+1, n.pca = 200)
+grp$Kstat
+
+table.value(table(pop(ind.list[[p]]), grp$grp), col.lab=paste("inf", 1:24),
+            row.lab=paste("ori", 1:24))
+
+##+ K BIC plot ----
+bic.m <- matrix(nrow = length(levels(ind.list[[p]]@pop))+1, ncol = length(levels(ind.list[[p]]@pop))+1)
+for(i in 1:length(levels(ind.list[[p]]@pop))+1){
+  grp <- find.clusters(ind.list[[p]], n.pca = 200, choose.n.clust = FALSE,  max.n.clust = length(levels(ind.list[[p]]@pop))+1)
+  bic.m[i,] <- grp$Kstat
+}
+
+bic.m <- bic.m %>%
+  as.data.frame() %>%
+  rownames_to_column(., var = "Group") %>%
+  pivot_longer(cols=starts_with("V"), names_to = "K", values_to = "BIC") %>%
+  mutate(K = as.factor(gsub("V", "", K))) %>%
+  arrange(K)
+p1 <- ggplot(bic.m, aes(x = K, y = BIC)) + geom_boxplot() + theme_bw() + xlab("Number of groups (K)")
+p1
+
+#retaining too many components with respect to the number of individuals can lead to over-fitting and unstability
+##in the membership probabilities returned by the method
+dapc1 <- dapc(ind.list[[p]], grp$grp)
+
+#look at plots
+scatter(dapc1, posi.da="bottomright", bg="white",
+        pch=17:24, cstar=0, scree.pca=TRUE,
+        posi.pca="bottomleft")
+assignplot(dapc1, subset=1:50)
+
+dapc1 <- dapc(ind.list[[p]], grp$grp, n.da = 100, n.pca = 40)
+
+##+ optimal pcs to retain based on a score ----
+temp <- optim.a.score(dapc1)
+dapc1 <- dapc(ind.list[[p]], grp$grp, n.da=100, n.pca = temp$best)
+
+scatter(dapc1, posi.da="bottomright", bg="white",
+        pch=17:24, cstar=0, scree.pca=TRUE,
+        posi.pca="bottomleft")
+
+##+ K iterations ----
+my_k <- 2:4
+
+grp_l <- vector(mode = "list", length = length(my_k))
+dapc_l <- vector(mode = "list", length = length(my_k))
+
+for(i in 1:length(dapc_l)){
+  set.seed(9)
+  grp_l[[i]] <- find.clusters(ind.list[[p]], n.pca = 200, n.clust = my_k[i])
+  dapc_l[[i]] <- dapc(ind.list[[p]], pop = grp_l[[i]]$grp, n.pca = 40, n.da = my_k[i])
+  #  dapc_l[[i]] <- dapc(gl_rubi, pop = grp_l[[i]]$grp, n.pca = 3, n.da = 2)
+}
+
+
+##+ plotting ----
+###++ set theme ----
+grays <- c("#CCCCCC", "#999999", "#333333")
+pca.theme <- list(
+  scale_shape_manual(values = c(21, 22, 23)),
+  theme(legend.position = "right", 
+        panel.background = element_blank(), 
+        panel.grid.major = element_line(colour = "gray", linetype = 4),
+        axis.title = element_text(size = 23),
+        axis.text = element_text(size = 20),
+        legend.title = element_text(size = 20),
+        legend.text = element_text(size = 18),
+        legend.key = element_blank(),
+        plot.title = element_text(face="bold",size=23)),
+  scale_y_continuous(breaks = c(-5, 0, 5), limits = c(-10, 5))
+)
+
+###++ make plot list ----
+dplot_l <- vector(mode = "list", length = length(my_k))
+
+for (i in 1:length(dapc_l)) {
+
+  temp <- as.data.frame(dapc_l[[i]]$ind.coord)
+  temp$Group <- dapc_l[[i]]$grp
+  
+  if (p %in% 3:5) { #single year genind objects
+    dapc2plot <- temp %>% 
+      mutate(ID = row.names(.)) %>% 
+      left_join(aztf, by = "ID") %>% 
+      select(ID, year, pop, Group, starts_with("LD")) %>%
+      mutate(pop = factor(pop),
+             year = factor(year))
+  } else { #all year genind objects
+    dapc2plot <- temp %>% 
+      mutate(ID = row.names(.)) %>% 
+      left_join(aztf, by = "ID") %>% 
+      select(ID, year, pop, Group, starts_with("LD")) %>%
+      mutate(pop = fct_relevel(factor(pop), c("1", "3", "4", "6", "7", "8", "9", "10", "16")),
+             year = fct_relevel(factor(year), c("2014", "2019", "2021")))
+    }
+  
+  if ("LD2" %in% colnames(dapc2plot) == FALSE) { 
+    
+    
+    
+    } else {  
+
+  pca <- ggplot() +
+    stat_ellipse(data = dapc2plot, aes(x=LD1, y=LD2, fill=pop, group=pop), geom="polygon", type = "t", alpha = 0.5, size=1, level = 0.9) +
+    stat_ellipse(data = dapc2plot, aes(x=LD1, y=LD2, color=Group, group=Group), type = "t", alpha = 0.95, size=1, level = 0.9) +
+    geom_point(data = dapc2plot, aes(x=LD1, y=LD2, fill=pop, shape=year), color="black", size=2.3, alpha=0.7) +
+    # geom_point(data = dapc2plot %>% filter(Group == 2), aes(x=LD1, y=LD2, fill=pop, shape=year), color="black", size=4.5, alpha=0.5) +
+    labs(x="LD1", y="LD2", fill="Pond", color="Group", shape="Year", title=paste0("K = ", my_k[i])) +
+    scale_fill_manual(values = aztf.pal, aesthetics = "fill") +
+    # scale_color_manual(values = aztf.pal, aesthetics = "color") +
+    guides(fill = guide_legend(override.aes=list(shape=21)), color="none") +
+    scale_shape_manual(values = c(21, 22, 23)) +
+    theme(legend.position = "bottom", 
+          panel.background = element_blank(), 
+          panel.grid.major = element_line(colour = "gray", linetype = 4))
+  
+    }
+  
+  dplot_l[[i]] <- pca
+
+# pca2 <- ggplot() +
+#   stat_ellipse(data = pca.all, aes(x=Axis1, y=Axis2, color=year, group=year), type = "t", alpha = 0.95, size=2, level = 0.9) +
+#   geom_point(data = pca.all, aes(x=Axis1, y=Axis2, fill=year, shape=year), color="black", size=4.5, alpha=0.5) +
+#   labs(x="PC1 (6.16%)", y="PC2 (4.05%)", fill="Year", color="Year", shape="Year") +
+#   scale_fill_manual(values = grays, aesthetics = "fill") +
+#   scale_color_manual(values = grays, aesthetics = "color") +
+#   pca.theme
+# # pca2
+}
+
+ggarrange(plotlist=dplot_l, p1,
+          ncol = 2, nrow = round(length(dplot_l)/2), common.legend = TRUE, legend="right")
+
+ggsave(filename = paste0(PATH, "/figures/DAPC_", ind.names[[p]], "_clustercomp.png"), plot = last_plot(), width = 8, height = 8)
+
+
+##+ look at clustering another way ----
+my_pal <- RColorBrewer::brewer.pal(n=10, name = "Spectral")
+
+my_df <- as.data.frame(dapc_l[[ 6 ]]$ind.coord)
+my_df$Group <- dapc_l[[ 6 ]]$grp
+
+p2 <- ggplot(my_df, aes(x = LD1, y = LD2, color = Group, fill = Group)) + 
+  geom_point(size = 4, shape = 21) + 
+  theme_bw() + 
+  scale_color_manual(values=c(my_pal)) + 
+  scale_fill_manual(values=c(paste(my_pal, "66", sep = "")))
+p2

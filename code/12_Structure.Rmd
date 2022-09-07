@@ -1,0 +1,420 @@
+---
+title: "Genetic Structure"
+author: "C. E. Moore"
+output: pdf_document
+---
+Last updated on `r Sys.Date()`  
+  
+*Note: Microsat data previously formatted from geneious output using 01a_DataPrep.R and then filtered for missing data in 10_MicrosatSummary.Rmd*  
+
+**Contents:**  
+1. Fst (hierfstat)  
+2. Fst (pegas)  
+3. Pairwise Fst  
+4. Dps (shared alleles)  
+5. Gst (*note: takes a long time to run - commented out, so does not update every knit*)
+6. PCA of pops  
+  
+```{r paths and data load, echo=FALSE, message=FALSE}
+## packages
+library(adegenet); library(ape); library(pegas); library(knitr); library(tidyverse); library(hierfstat); library(PopGenReport)
+
+## home path
+PATH <- "/home/chloe9mo/Documents/Projects/temporal_aztreefrog"
+
+## load and edit data
+source(file = paste0(PATH, "/code/01c_DataLoad.R"))
+```
+**Loaded packages:** `r (.packages())`  
+
+## Global and locus fstat  
+### hierfstat  
+``` {r, echo=FALSE, message=FALSE}
+g.fst <- data.frame(unlist(ind.names), stringsAsFactors = F) %>% 
+  add_column(Fst = NA, Fis = NA) %>% rename(group = unlist.ind.names.)
+
+for (i in 1:length(ind.list)) {
+  
+  g.fst[g.fst$group == ind.names[[i]],]$Fst <- wc(ind.list[[i]])$FST
+  g.fst[g.fst$group == ind.names[[i]],]$Fis <- wc(ind.list[[i]])$FIS
+  
+}
+
+kable(g.fst, caption = "Global F-statistics from hierfstat")
+
+g.fst.ci <- data.frame(unlist(ind.names), stringsAsFactors = F) %>% 
+  add_column(Fst = NA, CI_ll = NA, CI_ul = NA) %>% rename(group = unlist.ind.names.)
+
+for (i in 1:length(ind.list)) {
+  
+  print(paste0("Confidence Interval for ", ind.names[[i]], " F-stats"))
+  ci <- genind2hierfstat(ind.list[[i]])
+  print(boot.vc(ci[1], ci[-1])$ci)
+  bci <- boot.vc(ci[1], ci[-1], nboot = 10000)
+  g.fst.ci[g.fst.ci$group == ind.names[[i]],]$Fst <- bci$ci[2,2]
+  g.fst.ci[g.fst.ci$group == ind.names[[i]],]$CI_ll <- bci$ci[1,2]
+  g.fst.ci[g.fst.ci$group == ind.names[[i]],]$CI_ul <- bci$ci[3,2]
+  sig.fst <- boot.ppfst(ci, nboot = 10000)
+  print(sig.fst$ll)
+  cat("\n",ifelse(any(sig.fst$ll<0, na.rm = T), "at least one not sig. diff from 0", "all sig. diff from 0"),"\n\n")
+  
+}
+
+g.fst.ci %>% 
+  left_join(., g.fst %>% select(group, Fis)) %>%
+  mutate(group = case_when(group == "All Yrs - Indiv x Pop" ~ "All_Yrs",
+                           group == "All Yrs - Indiv x Year" ~ "All_Pops",
+                           group == "Indiv 2014" ~ "2014",
+                           group == "Indiv 2019" ~ "2019",
+                           group == "Indiv 2021" ~ "2021")) %>%
+  write.csv(., file=paste0(PATH, "/results_tables/Fst_global_hierfstat.csv"), row.names = F)
+```
+
+``` {r, echo=F, fig.align="center"}
+g.fst.ci <- g.fst.ci %>% mutate(gr = case_when(group %in% c("All Yrs - Indiv x Pop", "All Yrs - Indiv x Year") ~ "all",
+                                               group %in% c("Indiv 2014", "Indiv 2019", "Indiv 2021") ~ "one"))
+
+pf <- ggplot(data = g.fst.ci, aes(x=group, y=Fst)) +
+  geom_rect(xmin = 0, xmax = 2.5, ymin = -Inf, ymax = Inf, fill="#E5E4E2", alpha = 0.1) +
+  geom_errorbar(aes(x=group, ymin=CI_ll, ymax=CI_ul), color="black", width=0.3) +
+  geom_line(color="black") +
+  geom_point(aes(fill=gr), shape=21, color="black", size=6) +
+  scale_fill_manual(values = c("#FFF2EB", "#CC4E00")) +
+  scale_x_discrete(labels=c("All x Pop", "All x Year", "2014", "2019", "2021")) +
+  geom_vline(aes(xintercept=2.5), linetype="dashed") +
+  labs(y=bquote('Global' ~F[ST])) +
+  ggtitle(bquote('Global' ~F[ST]~ 'with 95% confidence intervals')) +
+  theme(legend.position = "none",
+        panel.background = element_blank(),
+        panel.grid = element_line(color="#E5E4E2"),
+        title = element_text(size=17),
+        axis.title.x = element_blank(),
+        axis.title.y = element_text(size = 15),
+        axis.text.x = element_text(size = 15),
+        axis.text.y = element_text(size = 12))
+# pf
+
+ggsave(filename = paste0(PATH, "/figures/global_fst_points.png"), plot = pf, width = 6, height = 6)
+knitr::include_graphics(paste0(PATH, "/figures/global_fst_points.png"))
+```
+
+### pegas  
+``` {r, echo=FALSE}
+ftab <- lapply(ind.list, function(x) pegas::Fst(as.loci(x)))
+lftab <- lapply(ind.list, function(x) as.data.frame(pegas::Fst(as.loci(x))) %>% rownames_to_column(var="locus"))
+
+l.fst <- lftab[[1]] %>% 
+  left_join(., lftab[[2]], by="locus") %>% 
+  left_join(., lftab[[3]], by="locus") %>% 
+  left_join(., lftab[[4]], by="locus") %>%
+  left_join(., lftab[[5]], by="locus") %>%
+  mutate(across(where(is.numeric), round, 3))
+
+l.fst.fst <- l.fst %>% select(locus, contains("Fst"))
+names(l.fst.fst) <- c("locus", unlist(ind.names))
+
+l.fst.fis <- l.fst %>% select(locus, contains("Fis"))
+names(l.fst.fis) <- c("locus", unlist(ind.names))
+
+l.fst.fit <- l.fst %>% select(locus, contains("Fit"))
+names(l.fst.fit) <- c("locus", unlist(ind.names))
+
+kable(l.fst.fst, caption="Per-Locus Fst", booktabs=T, valign= 't')
+kable(l.fst.fis, caption="Per-Locus Fis", booktabs=T, valign= 't')
+kable(l.fst.fit, caption="Per-Locus Fit", booktabs=T, valign= 't')
+  
+g.fst <- data.frame(unlist(ind.names), stringsAsFactors = F) %>% 
+  add_column(Fst = NA, Fis = NA, Fit = NA) %>% rename(group = unlist.ind.names.)
+for (i in 1:length(ftab)) {
+  
+  g.fst[g.fst$group == ind.names[[i]],]$Fst <- as.data.frame(t(colMeans(ftab[[i]])))$Fst
+  g.fst[g.fst$group == ind.names[[i]],]$Fit <- as.data.frame(t(colMeans(ftab[[i]])))$Fit
+  g.fst[g.fst$group == ind.names[[i]],]$Fis <- as.data.frame(t(colMeans(ftab[[i]])))$Fis
+  
+}
+kable(g.fst, caption = "Global F-statistics from pegas")
+```
+
+### Pairwise Fst  
+*note: \textcolor{green}{Nei's} method used*  
+``` {r, echo=FALSE, results='asis'}
+#redo the yr grouping genind
+yr.coord <- coord %>% dplyr::select(year_pop, lon, lat) %>% unique() %>% remove_rownames() %>% column_to_rownames("year_pop")
+
+ind_aztf_yr <- df2genind(aztf[,c(6:22)], sep = "/", ind.names = aztf$ID, NA.char = "-1/-1")
+ind_aztf_yr@pop <- as.factor(aztf$year_pop)
+ind_aztf_yr$other$xy <- subset(yr.coord, rownames(yr.coord) %in% aztf$year_pop) #assign coordinates
+
+ind.list[[6]] <- ind_aztf_yr
+pop.list[[6]] <- genind2genpop(ind_aztf_yr, quiet = T)
+ind.names[[6]] <- "Year_Pop"
+pop.names[[6]] <- "Year_Pop"
+
+rm(yr.coord, ind_aztf_yr)
+
+for (i in 1:length(ind.list)) {
+  
+  pw <- hierfstat::genet.dist(ind.list[[i]], method = "Nei87")
+  pw <- as.data.frame(as.matrix(pw))
+  pw[upper.tri(pw)] <- NA
+  print(kable(round(pw,3), caption=paste0("Pairwise Fst for ", ind.names[[i]])))
+  cat("Max pairwise = ", max(pw, na.rm = T), "; Min pairwise = ", min(pw[pw>0], na.rm=T), "\n")
+  cat("\n", "------------------------------------","\n")
+  write.csv(pw, file = paste0(PATH, "/results_tables/", gsub(" ", "_", ind.names[[i]]), "_pairwiseFst.csv"), row.names = T)
+  
+}
+
+g.yp <- genind2hierfstat(ind.list[[6]])
+print(boot.vc(g.yp[1], g.yp[-1])$ci)
+bci <- boot.vc(ci[1], ci[-1], nboot = 10000)
+yp.fst <- boot.ppfst(g.yp, nboot = 10000)
+
+ll <- yp.fst$ll %>%
+  as.data.frame() %>%
+  rownames_to_column(., "X2") %>%
+  pivot_longer(cols = starts_with("20"), names_to = "X", values_to = "pFst_ll") %>%
+  filter(!is.na(pFst_ll)) %>%
+  filter(X != X2)
+
+ul <- yp.fst$ul %>%
+  as.data.frame() %>%
+  rownames_to_column(., "X2") %>%
+  pivot_longer(cols = starts_with("20"), names_to = "X", values_to = "pFst_ul") %>%
+  filter(!is.na(pFst_ul)) %>%
+  filter(X != X2)
+
+pw <- read.csv(paste0(PATH, "/results_tables/Year_Pop_pairwiseFst.csv"))
+pw.long <- pw %>%
+  pivot_longer(cols = starts_with("X2"), names_to = "X2", values_to = "pFst") %>%
+  filter(!is.na(pFst)) %>%
+  mutate(X2 = gsub("X", "", X2)) %>%
+  filter(X != X2) %>%
+  left_join(., ul) %>%
+  left_join(., ll)
+  
+write.csv(pw.long, file=paste0(PATH, "/results_tables/Year_Pop_Long_pFst.csv"), row.names = F)
+
+#is structure between years at same site > than site between other sites, other years? is Fst higher at same site over years, than that site in a single year compared to all other sites
+
+# mutate(year = gsub("_[0-9]*$", "", X),
+#          pop = gsub("^[0-9]*_", "", X)) %>%
+```
+
+### Proportion of shared alleles (Dps)  
+```{r, echo=F}
+for (i in 1:length(ind.list)) {
+dps <- 1-pairwise.propShared(ind.list[[i]])
+dps <- round(as.data.frame(as.matrix(dps)),3)
+dps[upper.tri(dps)] <- NA
+
+print(kable(dps, caption=paste0("Dps for ", ind.names[[i]])))
+cat("Range is", min(dps[dps > 0], na.rm = T), "-", max(dps, na.rm = T), "\n")
+write.csv(dps, file=paste0(PATH, "/results_tables/", ind.names[[i]], "_pairwiseDps.csv"))
+}
+```
+
+### Gst  
+*see Meirmans & Hedrick 2011*  
+``` {r, echo = F, message=F, eval=F}
+library(mmod)
+
+gst.list <- list()
+for (i in 1:length(ind.list)) {
+  diff_stats(ind.list[[i]])
+  b.g <- chao_bootstrap(ind.list[[i]], nreps = 10000)
+  b.gd <- summarise_bootstrap(b.g, Gst_Hedrick)
+  gst.list[[i]] <- b.gd
+  
+  pop_dist <- dist(ind.list[[i]]@other$xy, method="euclidean")
+  az.pw_G <- pairwise_Gst_Hedrick(ind.list[[i]], linearized = TRUE)
+  
+  daz.pw_G <- round(as.data.frame(as.matrix(az.pw_G)),3)
+  daz.pw_G[upper.tri(daz.pw_G)] <- NA
+  write.csv(daz.pw_G, file = paste0(PATH, "/results_tables/", ind.names[[i]], "_pairwiseGst.csv"))
+  
+  mr <- mantel.rtest(az.pw_G, log(pop_dist), 999)
+  fit <- lm(as.vector(az.pw_G) ~ as.vector(pop_dist))
+  png(filename = paste0(PATH, "/figures/Dist_x_Gst_", ind.names[[i]], ".png"))
+  plot(as.vector(pop_dist), as.vector(az.pw_G), ylab="pairwise Gst", xlab="euc. distance", main=ind.names[[i]])
+  abline(fit)
+  mtext(paste0("p val =", mr$pvalue), side = 3)
+  dev.off()
+}
+
+global.gst <- as.data.frame(t(gst.list[[1]]$summary.global.het))
+global.gst$group <- ind.names[[1]]
+for (i in 2:length(gst.list)) {
+  g <- as.data.frame(t(gst.list[[i]]$summary.global.het))
+  g$group <- ind.names[[i]]
+  global.gst <- bind_rows(global.gst, g)
+}
+
+global.gst <- global.gst %>% 
+  mutate(group = case_when(group == "All Yrs - Indiv x Pop" ~ "Pop_Group",
+                           group == "All Yrs - Indiv x Year" ~ "Year_Group",
+                           group == "Indiv 2014" ~ "2014",
+                           group == "Indiv 2019" ~ "2019",
+                           group == "Indiv 2021" ~ "2021",
+                           T ~ group)) %>%
+  relocate(group)
+write.csv(global.gst, file=paste0(PATH, "/results_tables/Gst_global.csv"), row.names = F)
+```
+``` {r, echo=F, fig.align="center"}
+global.gst <- read.csv(paste0(PATH, "/results_tables/Gst_global.csv"))
+global.gst <- global.gst %>% mutate(gr = case_when(group %in% c("Pop_Group", "Year_Group", "Year_Pop") ~ "all",
+                                               group %in% c("2014", "2019", "2021") ~ "one"))
+
+pg <- ggplot(data = global.gst, aes(x=group, y=observed)) +
+  geom_rect(xmin = 0, xmax = 3.5, ymin = -Inf, ymax = Inf, fill="#E5E4E2", alpha = 0.1) +
+  geom_errorbar(aes(x=group, ymin=lower.normal, ymax=upper.normal), color="black", width=0.3) +
+  geom_line(color="black") +
+  geom_point(aes(fill=gr), shape=21, color="black", size=5.5) +
+  scale_fill_manual(values = c("#FFF2EB", "#CC4E00")) +
+  scale_x_discrete(labels=c("2014", "2019", "2021", "All x\nPop", "All x\nYear", "All x\nYear+Pop")) +
+  geom_vline(aes(xintercept=3.5), linetype="dashed") +
+  labs(y=bquote('Global' ~'G"'[ST])) +
+  ggtitle(bquote(atop('Global' ~'G"'[ST]~ '','with 95% confidence intervals'))) +
+  theme(legend.position = "none",
+        panel.background = element_blank(),
+        panel.grid = element_line(color="#E5E4E2"),
+        title = element_text(size=17),
+        plot.title = element_text(hjust=0.5),
+        axis.title.x = element_blank(),
+        axis.title.y = element_text(size = 15),
+        axis.text.x = element_text(size = 15),
+        axis.text.y = element_text(size = 12))
+# pg
+ggsave(filename = paste0(PATH, "/figures/global_gst_points.png"), plot = pg, width = 6, height = 6)
+knitr::include_graphics(paste0(PATH, "/figures/global_gst_points.png"))
+```
+#### Gst x Distance  
+``` {r, echo=FALSE, fig.align="center"}
+knitr::include_graphics(paste0(PATH, "/figures/Dist_x_Gst_All Yrs - Indiv x Pop.png"))
+knitr::include_graphics(paste0(PATH, "/figures/Dist_x_Gst_All Yrs - Indiv x Year.png"))
+knitr::include_graphics(paste0(PATH, "/figures/Dist_x_Gst_Indiv 2014.png"))
+knitr::include_graphics(paste0(PATH, "/figures/Dist_x_Gst_Indiv 2019.png"))
+knitr::include_graphics(paste0(PATH, "/figures/Dist_x_Gst_Indiv 2021.png"))
+knitr::include_graphics(paste0(PATH, "/figures/Dist_x_Gst_Year_Pop.png"))
+```
+
+## Multivariate Analysis  
+### PCA
+*Note: Can only do PCA when matrix is Euclidean!* 
+  
+#### Need to deal with NA values first  
+There are `r sum(is.na(ind.list[[1]]$tab))` missing data to be replaced  
+Replace missing data with mean allele frequency  
+
+``` {r, echo=FALSE, message=FALSE}
+library(gtools)
+# replace missing values with mean of corresponding allele
+x.list <- lapply(ind.list, function (x) gtools::na.replace(x$tab, mean, na.rm = TRUE) )
+
+x.list[[1]][1:5,1:5]
+```
+
+```{r, echo=FALSE, fig.dim=c(4,3)}
+pca.list <- lapply(x.list, function(x) dudi.pca(x, scale = FALSE, scannf = FALSE, nf = 3))
+
+# barplot(pca.list[[1]]$eig[1:50], main = paste0("PCA eigenvalues of ", ind.names[[1]]), col = heat.colors(50))
+```
+
+
+``` {r, echo=FALSE, fig.align="center", eval=F}
+for (i in 2:length(pca.list)) {
+  
+  s.label(pca.list[[i]]$li) #li is the principle components, which in this case is summary of genetic diversity
+  title(paste0("PCA of ", ind.names[[i]], " - axes 1-2"), line = 1)
+  add.scatter.eig(pca.list[[i]]$eig[1:20], 2,1,2)
+  
+}
+```
+
+
+``` {r, echo=FALSE, fig.align="center", eval=F}
+for (i in 1:length(pca.list)) {
+
+    col <- virid(length(levels(ind.list[[i]]@pop)))
+  s.class(pca.list[[i]]$li, pop(ind.list[[i]]),xax=1,yax=2, col=transp(col,.8), axesell=FALSE, cstar=0, cpoint=3, grid=FALSE)
+  title(paste0("PCA of ", ind.names[[i]], " - axes 1-2"), line = 1)
+  
+}
+```
+
+
+``` {r, echo=FALSE, fig.align = "center", eval=F}
+for (i in 1:length(pca.list)) {
+
+  s.class(pca.list[[i]]$li, pop(ind.list[[i]]), xax=1, yax=3, sub="PCA 1-3", csub=2)
+  title(paste0("PCA of ", ind.names[[i]], " - axes 1-3"))
+  add.scatter.eig(pca.list[[i]]$eig[1:20],nf=3,xax=1,yax=3)
+
+}
+```
+
+
+``` {r, echo=F, fig.align="center"}
+# library(ggforce)
+
+pca.all <- pca.list[[1]]$li %>% 
+  mutate(ID = row.names(.)) %>% 
+  left_join(aztf, by = "ID") %>% 
+  select(ID, year, pop, Axis1, Axis2) %>%
+  mutate(pop = fct_relevel(factor(pop), c("1", "3", "4", "6", "7", "8", "9", "10", "16")),
+         year = fct_relevel(factor(year), c("2014", "2019", "2021")))
+
+pca.theme <- list(
+  scale_shape_manual(values = c(21, 22, 23)),
+  theme(legend.position = "right", 
+        panel.background = element_blank(), 
+        panel.grid.major = element_line(colour = "gray", linetype = 4),
+        axis.title = element_text(size = 23),
+        axis.text = element_text(size = 20),
+        legend.title = element_text(size = 20),
+        legend.text = element_text(size = 18),
+        legend.key = element_blank(),
+        plot.title = element_text(face="bold",size=23)),
+  scale_y_continuous(breaks = c(-3, 0, 3), limits = c(-3,4))
+)
+
+pca <- ggplot() +
+  stat_ellipse(data = pca.all, aes(x=Axis1, y=Axis2, color=pop, group=pop), type = "t", alpha = 0.95, size=2, level = 0.9) +
+  geom_point(data = pca.all, aes(x=Axis1, y=Axis2, fill=pop, shape=year), color="black", size=4.5, alpha=0.5) +
+  labs(x="PC1 (6.16%)", y="PC2 (4.05%)", fill="Pond", color="Pond", shape="Year") +
+  scale_fill_manual(values = aztf.pal, aesthetics = "fill") +
+  scale_color_manual(values = aztf.pal, aesthetics = "color") +
+  guides(fill = guide_legend(override.aes=list(shape=21))) +
+  pca.theme
+# pca
+
+grays <- c("#CCCCCC", "#999999", "#333333")
+pca2 <- ggplot() +
+  stat_ellipse(data = pca.all, aes(x=Axis1, y=Axis2, color=year, group=year), type = "t", alpha = 0.95, size=2, level = 0.9) +
+  geom_point(data = pca.all, aes(x=Axis1, y=Axis2, fill=year, shape=year), color="black", size=4.5, alpha=0.5) +
+  labs(x="PC1 (6.16%)", y="PC2 (4.05%)", fill="Year", color="Year", shape="Year") +
+  scale_fill_manual(values = grays, aesthetics = "fill") +
+  scale_color_manual(values = grays, aesthetics = "color") +
+  pca.theme
+# pca2
+
+
+ggsave(filename = paste0(PATH,"/figures/PCA_xYear.png"), plot = pca2, width = 8, height = 7)
+ggsave(filename = paste0(PATH,"/figures/PCA_xPop.png"), plot = pca, width = 8, height = 7)
+
+knitr::include_graphics(paste0(PATH, "/figures/PCA_xYear.png"))
+knitr::include_graphics(paste0(PATH, "/figures/PCA_xPop.png"))
+```
+  
+  
+### DAPC  
+Clusters were selected by lowest BIC, if more than one cluster had similar BIC, they all were looked at.  
+When selecting the number of PCs, looked at PC x Cumulative Variance plot and visually picked, also used a score. Compared outputs from both.  
+  
+General notes:  
+*Year_Pop*: 6 to 8 clusters; with higher PCs retained, a single cluster separates out more and moves closer in approaching PC selected by a score.  
+
+
+
+
+
+
