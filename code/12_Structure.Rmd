@@ -1,23 +1,32 @@
 ---
-title: "Genetic Structure"
+title: "Genetic Structure Results"
 author: "C. E. Moore"
-output: pdf_document
+output: 
+  pdf_document:
+    latex_engine: pdflatex
+urlcolor: blue
+header-includes:
+  \usepackage{helvet}
+  \renewcommand{\familydefault}{\sfdefault}
 ---
 Last updated on `r Sys.Date()`  
   
 *Note: Microsat data previously formatted from geneious output using 01a_DataPrep.R and then filtered for missing data in 10_MicrosatSummary.Rmd*  
 
 **Contents:**  
-1. Fst (hierfstat)  
-2. Fst (pegas)  
-3. Pairwise Fst  
+1. F~ST~ (hierfstat)  
+2. F~ST~ (pegas)  
+3. Pairwise F~ST~  
 4. Dps (shared alleles)  
-5. Gst (*note: takes a long time to run - commented out, so does not update every knit*)
+5. G~ST~
 6. PCA of pops  
+7. DAPCs  
   
 ```{r paths and data load, echo=FALSE, message=FALSE}
 ## packages
-library(adegenet); library(ape); library(pegas); library(knitr); library(tidyverse); library(hierfstat); library(PopGenReport)
+library(adegenet); library(ape); library(pegas); library(knitr); library(tidyverse); library(hierfstat); library(PopGenReport); library(ggpubr)
+
+knitr::opts_chunk$set(echo = FALSE)
 
 ## home path
 PATH <- "/home/chloe9mo/Documents/Projects/temporal_aztreefrog"
@@ -27,9 +36,9 @@ source(file = paste0(PATH, "/code/01c_DataLoad.R"))
 ```
 **Loaded packages:** `r (.packages())`  
 
-## Global and locus fstat  
-### hierfstat  
-``` {r, echo=FALSE, message=FALSE}
+## Global and Locus F Statistics  
+### hierfstat F~ST~  
+``` {r hierfstat fst, message=FALSE, results='asis'}
 g.fst <- data.frame(unlist(ind.names), stringsAsFactors = F) %>% 
   add_column(Fst = NA, Fis = NA) %>% rename(group = unlist.ind.names.)
 
@@ -47,16 +56,15 @@ g.fst.ci <- data.frame(unlist(ind.names), stringsAsFactors = F) %>%
 
 for (i in 1:length(ind.list)) {
   
-  print(paste0("Confidence Interval for ", ind.names[[i]], " F-stats"))
   ci <- genind2hierfstat(ind.list[[i]])
-  print(boot.vc(ci[1], ci[-1])$ci)
+  print(kable(boot.vc(ci[1], ci[-1])$ci, caption = paste0("Confidence Interval for ", ind.names[[i]], " F-stats")))
   bci <- boot.vc(ci[1], ci[-1], nboot = 10000)
   g.fst.ci[g.fst.ci$group == ind.names[[i]],]$Fst <- bci$ci[2,2]
   g.fst.ci[g.fst.ci$group == ind.names[[i]],]$CI_ll <- bci$ci[1,2]
   g.fst.ci[g.fst.ci$group == ind.names[[i]],]$CI_ul <- bci$ci[3,2]
   sig.fst <- boot.ppfst(ci, nboot = 10000)
-  print(sig.fst$ll)
-  cat("\n",ifelse(any(sig.fst$ll<0, na.rm = T), "at least one not sig. diff from 0", "all sig. diff from 0"),"\n\n")
+  # print(sig.fst$ll)
+  cat("\n",ifelse(any(sig.fst$ll<0, na.rm = T), "At least one pairwise Fst not sig. diff from 0", "All pairwise Fst sig. diff from 0"),"\n\n")
   
 }
 
@@ -70,7 +78,7 @@ g.fst.ci %>%
   write.csv(., file=paste0(PATH, "/results_tables/Fst_global_hierfstat.csv"), row.names = F)
 ```
 
-``` {r, echo=F, fig.align="center"}
+``` {r hierfstat global fst plot setup, message=F, eval=F}
 g.fst.ci <- g.fst.ci %>% mutate(gr = case_when(group %in% c("All Yrs - Indiv x Pop", "All Yrs - Indiv x Year") ~ "all",
                                                group %in% c("Indiv 2014", "Indiv 2019", "Indiv 2021") ~ "one"))
 
@@ -95,11 +103,18 @@ pf <- ggplot(data = g.fst.ci, aes(x=group, y=Fst)) +
 # pf
 
 ggsave(filename = paste0(PATH, "/figures/global_fst_points.png"), plot = pf, width = 6, height = 6)
-knitr::include_graphics(paste0(PATH, "/figures/global_fst_points.png"))
 ```
+\begin{figure}
+\centering
+\includegraphics[width=0.5\textwidth]{"/home/chloe9mo/Documents/Projects/temporal_aztreefrog/figures/global_fst_points.png"}
+\caption{Comparison of global Fst values with single year and multi-year groupings, population structure vs year structure.}
+\end{figure}
 
-### pegas  
-``` {r, echo=FALSE}
+---
+
+\pagebreak
+### pegas F~ST~
+``` {r pegas fst}
 ftab <- lapply(ind.list, function(x) pegas::Fst(as.loci(x)))
 lftab <- lapply(ind.list, function(x) as.data.frame(pegas::Fst(as.loci(x))) %>% rownames_to_column(var="locus"))
 
@@ -135,9 +150,12 @@ for (i in 1:length(ftab)) {
 kable(g.fst, caption = "Global F-statistics from pegas")
 ```
 
-### Pairwise Fst  
+---
+
+\bigskip
+### Pairwise F~ST~  
 *note: \textcolor{green}{Nei's} method used*  
-``` {r, echo=FALSE, results='asis'}
+``` {r add year_pop, message=F}
 #redo the yr grouping genind
 yr.coord <- coord %>% dplyr::select(year_pop, lon, lat) %>% unique() %>% remove_rownames() %>% column_to_rownames("year_pop")
 
@@ -151,38 +169,68 @@ ind.names[[6]] <- "Year_Pop"
 pop.names[[6]] <- "Year_Pop"
 
 rm(yr.coord, ind_aztf_yr)
-
+```
+``` {r pairwise fst heatmaps, message=F, eval=F}
+#make pairwise heat plot
+heat.l <- vector(mode="list", length=length(ind.list))
 for (i in 1:length(ind.list)) {
-  
+  #get pfst values
   pw <- hierfstat::genet.dist(ind.list[[i]], method = "Nei87")
   pw <- as.data.frame(as.matrix(pw))
   pw[upper.tri(pw)] <- NA
-  print(kable(round(pw,3), caption=paste0("Pairwise Fst for ", ind.names[[i]])))
-  cat("Max pairwise = ", max(pw, na.rm = T), "; Min pairwise = ", min(pw[pw>0], na.rm=T), "\n")
-  cat("\n", "------------------------------------","\n")
-  write.csv(pw, file = paste0(PATH, "/results_tables/", gsub(" ", "_", ind.names[[i]]), "_pairwiseFst.csv"), row.names = T)
   
+  #make ggplot friendly
+  pw.long <- pw %>%
+    rownames_to_column(var = "pop") %>%
+    pivot_longer(cols = -pop, names_to = "pop2", values_to = "pFst") %>%
+    mutate(pop = as.factor(as.numeric(pop)),
+           pop2 = as.factor(as.numeric(pop2)))
+  
+  #heatmap it
+  heat.l[[i]] <- ggplot() + 
+    geom_tile(data=pw.long, aes(pop, pop2, fill=pFst)) +
+    scale_fill_viridis_c(na.value = NA) +
+    labs(title=ind.names[[i]], subtitle = paste0("Range is ", min(pw[pw>0], na.rm=T), "-", max(pw, na.rm = T)),
+         y = "pop") +
+    theme_bw()
+  ggsave(paste0(PATH, "/figures/pairwiseFst_heatmap_", ind.names[[i]], ".png"), plot = heat.l[[i]])
+  write.csv(pw, file = paste0(PATH, "/results_tables/", gsub(" ", "_", ind.names[[i]]), "_pairwiseFst.csv"), row.names = T)
 }
 
+#getting temporal pairwise fst table with significance
 g.yp <- genind2hierfstat(ind.list[[6]])
-print(boot.vc(g.yp[1], g.yp[-1])$ci)
-bci <- boot.vc(ci[1], ci[-1], nboot = 10000)
 yp.fst <- boot.ppfst(g.yp, nboot = 10000)
-
+#lower ci
 ll <- yp.fst$ll %>%
   as.data.frame() %>%
   rownames_to_column(., "X2") %>%
   pivot_longer(cols = starts_with("20"), names_to = "X", values_to = "pFst_ll") %>%
   filter(!is.na(pFst_ll)) %>%
   filter(X != X2)
-
+#upper ci
 ul <- yp.fst$ul %>%
   as.data.frame() %>%
   rownames_to_column(., "X2") %>%
   pivot_longer(cols = starts_with("20"), names_to = "X", values_to = "pFst_ul") %>%
   filter(!is.na(pFst_ul)) %>%
   filter(X != X2)
-
+#make it long
+pw <- hierfstat::genet.dist(ind.list[[6]], method = "Nei87")
+pw <- as.data.frame(as.matrix(pw)) %>%
+  relocate('2015_1', '2021_1',
+           '2015_3', '2021_3',
+           '2015_4', '2019_4', '2021_4',
+           '2015_6', '2019_6', '2021_6',
+           '2015_7', '2019_7', '2021_7',
+           '2015_8', '2019_8', '2021_8',
+           '2015_9', '2019_9', '2021_9',
+           '2015_10', '2021_10',
+           '2019_16', '2021_16')
+pw <- pw %>%
+  rownames_to_column(var="group") %>%
+  arrange(factor(group, levels = names(pw))) %>%
+  column_to_rownames("group")
+write.csv(pw, file = paste0(PATH, "/results_tables/", gsub(" ", "_", ind.names[[6]]), "_pairwiseFst.csv"), row.names = T)
 pw <- read.csv(paste0(PATH, "/results_tables/Year_Pop_pairwiseFst.csv"))
 pw.long <- pw %>%
   pivot_longer(cols = starts_with("X2"), names_to = "X2", values_to = "pFst") %>%
@@ -191,31 +239,55 @@ pw.long <- pw %>%
   filter(X != X2) %>%
   left_join(., ul) %>%
   left_join(., ll)
-  
 write.csv(pw.long, file=paste0(PATH, "/results_tables/Year_Pop_Long_pFst.csv"), row.names = F)
 
-#is structure between years at same site > than site between other sites, other years? is Fst higher at same site over years, than that site in a single year compared to all other sites
+pw.long <- pw.long %>% 
+  mutate(X = fct_relevel(factor(X), gsub("X", "", names(pw[,-1]))),
+         X2 = fct_relevel(factor(X2), gsub("X", "", names(pw[,-1]))))
 
-# mutate(year = gsub("_[0-9]*$", "", X),
-#          pop = gsub("^[0-9]*_", "", X)) %>%
+heat.l[[6]] <- ggplot() + 
+  geom_tile(data=pw.long, aes(X, X2, fill=pFst)) +
+  scale_fill_viridis_c(na.value = NA) +
+  labs(title=ind.names[[6]], subtitle = paste0("Range is ", min(pw[pw>0], na.rm=T), "-", max(pw[,-1], na.rm = T)),
+       y = "", x="") +
+  theme_bw() +
+  theme(axis.text.x = element_text(angle = 60, hjust=1)) 
+ggsave(paste0(PATH, "/figures/pairwiseFst_heatmap_", ind.names[[6]], ".png"), plot = heat.l[[6]])
+
+hc <- ggarrange(plotlist=heat.l[-6], ncol = 2, nrow = round(length(heat.l)/2))
+ggsave(filename = paste0(PATH, "/figures/pairwiseFst_heatmap_comp.png"), plot = hc, width = 8, height = 8)
 ```
+\begin{figure}
+\centering
+\includegraphics[width=0.9\textwidth]{"/home/chloe9mo/Documents/Projects/temporal_aztreefrog/figures/pairwiseFst_heatmap_comp.png"}
+\caption{Comparison of pairwise Fst values across groupings.}
+\end{figure}
+\pagebreak
+\begin{figure}
+\centering
+\includegraphics[width=0.9\textwidth]{"/home/chloe9mo/Documents/Projects/temporal_aztreefrog/figures/pairwiseFst_heatmap_Year_Pop.png"}
+\caption{Temporal pairwise Fst. Looks like populations are more similar to themselves in other years than other populations pretty consistently.}
+\end{figure}
 
+---
+
+\bigskip
 ### Proportion of shared alleles (Dps)  
-```{r, echo=F}
-for (i in 1:length(ind.list)) {
+```{r DPS, results='asis'}
+for (i in 1:5) {
 dps <- 1-pairwise.propShared(ind.list[[i]])
 dps <- round(as.data.frame(as.matrix(dps)),3)
 dps[upper.tri(dps)] <- NA
 
-print(kable(dps, caption=paste0("Dps for ", ind.names[[i]])))
-cat("Range is", min(dps[dps > 0], na.rm = T), "-", max(dps, na.rm = T), "\n")
+print(kable(dps, caption=paste0("Dps for ", ind.names[[i]], ". Range is ", min(dps[dps > 0], na.rm = T), "-", max(dps, na.rm = T))))
 write.csv(dps, file=paste0(PATH, "/results_tables/", ind.names[[i]], "_pairwiseDps.csv"))
 }
 ```
 
-### Gst  
+### G~ST~  
 *see Meirmans & Hedrick 2011*  
-``` {r, echo = F, message=F, eval=F}
+
+``` {r Gst global calc, message=F, eval=F}
 library(mmod)
 
 gst.list <- list()
@@ -259,7 +331,7 @@ global.gst <- global.gst %>%
   relocate(group)
 write.csv(global.gst, file=paste0(PATH, "/results_tables/Gst_global.csv"), row.names = F)
 ```
-``` {r, echo=F, fig.align="center"}
+``` {r gst dot plot, eval=F}
 global.gst <- read.csv(paste0(PATH, "/results_tables/Gst_global.csv"))
 global.gst <- global.gst %>% mutate(gr = case_when(group %in% c("Pop_Group", "Year_Group", "Year_Pop") ~ "all",
                                                group %in% c("2014", "2019", "2021") ~ "one"))
@@ -285,42 +357,57 @@ pg <- ggplot(data = global.gst, aes(x=group, y=observed)) +
         axis.text.y = element_text(size = 12))
 # pg
 ggsave(filename = paste0(PATH, "/figures/global_gst_points.png"), plot = pg, width = 6, height = 6)
-knitr::include_graphics(paste0(PATH, "/figures/global_gst_points.png"))
 ```
+
+\begin{figure}[!ht]
+  \centering
+  \includegraphics[width=0.5\textwidth]{"/home/chloe9mo/Documents/Projects/temporal_aztreefrog/figures/global_gst_points.png"}
+  \caption{Comparison of global Gst values with single year and multi-year groupings, population structure vs year structure.}
+\end{figure}
+<br>
+<br>
+
 #### Gst x Distance  
-``` {r, echo=FALSE, fig.align="center"}
-knitr::include_graphics(paste0(PATH, "/figures/Dist_x_Gst_All Yrs - Indiv x Pop.png"))
-knitr::include_graphics(paste0(PATH, "/figures/Dist_x_Gst_All Yrs - Indiv x Year.png"))
-knitr::include_graphics(paste0(PATH, "/figures/Dist_x_Gst_Indiv 2014.png"))
-knitr::include_graphics(paste0(PATH, "/figures/Dist_x_Gst_Indiv 2019.png"))
-knitr::include_graphics(paste0(PATH, "/figures/Dist_x_Gst_Indiv 2021.png"))
-knitr::include_graphics(paste0(PATH, "/figures/Dist_x_Gst_Year_Pop.png"))
-```
+\begin{figure}[!hb]
+  \centering
+  \includegraphics[width=0.45\textwidth]{"/home/chloe9mo/Documents/Projects/temporal_aztreefrog/figures/Dist_x_Gst_All Yrs - Indiv x Year.png"}
+  \includegraphics[width=0.45\textwidth]{"/home/chloe9mo/Documents/Projects/temporal_aztreefrog/figures/Dist_x_Gst_All Yrs - Indiv x Pop.png"}
+  \caption{Across year comparison of genetic x euclidian distance between populations or time.}
+\end{figure}
+\pagebreak
+
+\begin{figure}[!ht]
+  \centering
+  \includegraphics[width=0.4\textwidth]{"/home/chloe9mo/Documents/Projects/temporal_aztreefrog/figures/Dist_x_Gst_Indiv 2014.png"}
+  \includegraphics[width=0.4\textwidth]{"/home/chloe9mo/Documents/Projects/temporal_aztreefrog/figures/Dist_x_Gst_Indiv 2019.png"}
+  \includegraphics[width=0.4\textwidth]{"/home/chloe9mo/Documents/Projects/temporal_aztreefrog/figures/Dist_x_Gst_Indiv 2021.png"}
+  \caption{Individual year comparison of genetic x euclidian distance.}
+\end{figure}
+
+<br>
+
+---
+
+\newpage
 
 ## Multivariate Analysis  
 ### PCA
-*Note: Can only do PCA when matrix is Euclidean!* 
-  
-#### Need to deal with NA values first  
+*Note: Can only do PCA when matrix is Euclidean!*  
 There are `r sum(is.na(ind.list[[1]]$tab))` missing data to be replaced  
-Replace missing data with mean allele frequency  
+Replaced missing data with mean allele frequency.  
 
-``` {r, echo=FALSE, message=FALSE}
+``` {r pca set up, message=FALSE, eval=F}
 library(gtools)
 # replace missing values with mean of corresponding allele
 x.list <- lapply(ind.list, function (x) gtools::na.replace(x$tab, mean, na.rm = TRUE) )
 
-x.list[[1]][1:5,1:5]
-```
-
-```{r, echo=FALSE, fig.dim=c(4,3)}
+# x.list[[1]][1:5,1:5]
 pca.list <- lapply(x.list, function(x) dudi.pca(x, scale = FALSE, scannf = FALSE, nf = 3))
 
 # barplot(pca.list[[1]]$eig[1:50], main = paste0("PCA eigenvalues of ", ind.names[[1]]), col = heat.colors(50))
 ```
 
-
-``` {r, echo=FALSE, fig.align="center", eval=F}
+``` {r generic pca plots, fig.align="center", eval=F}
 for (i in 2:length(pca.list)) {
   
   s.label(pca.list[[i]]$li) #li is the principle components, which in this case is summary of genetic diversity
@@ -328,10 +415,7 @@ for (i in 2:length(pca.list)) {
   add.scatter.eig(pca.list[[i]]$eig[1:20], 2,1,2)
   
 }
-```
 
-
-``` {r, echo=FALSE, fig.align="center", eval=F}
 for (i in 1:length(pca.list)) {
 
     col <- virid(length(levels(ind.list[[i]]@pop)))
@@ -339,10 +423,7 @@ for (i in 1:length(pca.list)) {
   title(paste0("PCA of ", ind.names[[i]], " - axes 1-2"), line = 1)
   
 }
-```
 
-
-``` {r, echo=FALSE, fig.align = "center", eval=F}
 for (i in 1:length(pca.list)) {
 
   s.class(pca.list[[i]]$li, pop(ind.list[[i]]), xax=1, yax=3, sub="PCA 1-3", csub=2)
@@ -352,8 +433,7 @@ for (i in 1:length(pca.list)) {
 }
 ```
 
-
-``` {r, echo=F, fig.align="center"}
+``` {r pca ggplot, eval=F}
 # library(ggforce)
 
 pca.all <- pca.list[[1]]$li %>% 
@@ -397,24 +477,44 @@ pca2 <- ggplot() +
   pca.theme
 # pca2
 
-
 ggsave(filename = paste0(PATH,"/figures/PCA_xYear.png"), plot = pca2, width = 8, height = 7)
 ggsave(filename = paste0(PATH,"/figures/PCA_xPop.png"), plot = pca, width = 8, height = 7)
-
-knitr::include_graphics(paste0(PATH, "/figures/PCA_xYear.png"))
-knitr::include_graphics(paste0(PATH, "/figures/PCA_xPop.png"))
 ```
-  
+
+\begin{figure}[!hb]
+  \centering
+  \includegraphics[width=0.6\textwidth]{"/home/chloe9mo/Documents/Projects/temporal_aztreefrog/figures/PCA_xYear.png"}
+  \includegraphics[width=0.6\textwidth]{"/home/chloe9mo/Documents/Projects/temporal_aztreefrog/figures/PCA_xPop.png"}
+  \caption{PCA of all individuals across years grouped by either population or year. Shows higher structure spatially than temporally.}
+\end{figure}
+
+<br>
   
 ### DAPC  
 Clusters were selected by lowest BIC, if more than one cluster had similar BIC, they all were looked at.  
 When selecting the number of PCs, looked at PC x Cumulative Variance plot and visually picked, also used a score. Compared outputs from both.  
-  
-General notes:  
-*Year_Pop*: 6 to 8 clusters; with higher PCs retained, a single cluster separates out more and moves closer in approaching PC selected by a score.  
+*DAPC run in 12a_DAPC.R script*  
 
+\begin{figure}[!ht]
+  \centering
+  \includegraphics[width=0.9\textwidth]{"/home/chloe9mo/Documents/Projects/temporal_aztreefrog/figures/DAPC_Indiv 2014_clustercomp.png"}
+  \caption{DAPC of 2014 samples only and BIC values for iterations of K.}
+\end{figure}
 
+\begin{figure}[!ht]
+  \centering
+  \includegraphics[width=0.9\textwidth]{"/home/chloe9mo/Documents/Projects/temporal_aztreefrog/figures/DAPC_Indiv 2019_clustercomp.png"}
+  \caption{DAPC of 2019 samples only and BIC values for iterations of K.}
+\end{figure}
 
+\begin{figure}[!ht]
+  \centering
+  \includegraphics[width=0.9\textwidth]{"/home/chloe9mo/Documents/Projects/temporal_aztreefrog/figures/DAPC_Indiv 2021_clustercomp.png"}
+  \caption{DAPC of 2021 samples only and BIC values for iterations of K.}
+\end{figure}
 
-
-
+\begin{figure}[!ht]
+  \centering
+  \includegraphics[width=0.9\textwidth]{"/home/chloe9mo/Documents/Projects/temporal_aztreefrog/figures/DAPC_All Yrs - Indiv x Pop_clustercomp.png"}
+  \caption{DAPC of all years, with populations highlighted and BIC values for iterations of K.}
+\end{figure}

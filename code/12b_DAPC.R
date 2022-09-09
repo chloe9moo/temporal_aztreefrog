@@ -25,7 +25,7 @@ rm(yr.coord, ind_aztf_yr)
 
 #find clusters ----
 #will need to do this one by one
-p <- 4 #select set to run
+p <- 1 #select set to run
 
 #no real reason to choose low number of pc's
 grp <- find.clusters(ind.list[[p]], max.n.clust = length(levels(ind.list[[p]]@pop))+1, n.pca = 200)
@@ -45,7 +45,7 @@ bic.m <- bic.m %>%
   as.data.frame() %>%
   rownames_to_column(., var = "Group") %>%
   pivot_longer(cols=starts_with("V"), names_to = "K", values_to = "BIC") %>%
-  mutate(K = as.factor(gsub("V", "", K))) %>%
+  mutate(K = as.factor(as.numeric(gsub("V", "", K)))) %>%
   arrange(K)
 p1 <- ggplot(bic.m, aes(x = K, y = BIC)) + geom_boxplot() + theme_bw() + xlab("Number of groups (K)")
 p1
@@ -60,7 +60,7 @@ scatter(dapc1, posi.da="bottomright", bg="white",
         posi.pca="bottomleft")
 assignplot(dapc1, subset=1:50)
 
-dapc1 <- dapc(ind.list[[p]], grp$grp, n.da = 100, n.pca = 40)
+dapc1 <- dapc(ind.list[[p]], grp$grp, n.da = 100, n.pca = 100)
 
 ##+ optimal pcs to retain based on a score ----
 temp <- optim.a.score(dapc1)
@@ -71,7 +71,7 @@ scatter(dapc1, posi.da="bottomright", bg="white",
         posi.pca="bottomleft")
 
 ##+ K iterations ----
-my_k <- 2:4
+my_k <- 6:8
 
 grp_l <- vector(mode = "list", length = length(my_k))
 dapc_l <- vector(mode = "list", length = length(my_k))
@@ -79,7 +79,7 @@ dapc_l <- vector(mode = "list", length = length(my_k))
 for(i in 1:length(dapc_l)){
   set.seed(9)
   grp_l[[i]] <- find.clusters(ind.list[[p]], n.pca = 200, n.clust = my_k[i])
-  dapc_l[[i]] <- dapc(ind.list[[p]], pop = grp_l[[i]]$grp, n.pca = 40, n.da = my_k[i])
+  dapc_l[[i]] <- dapc(ind.list[[p]], pop = grp_l[[i]]$grp, n.pca = 70, n.da = my_k[i])
   #  dapc_l[[i]] <- dapc(gl_rubi, pop = grp_l[[i]]$grp, n.pca = 3, n.da = 2)
 }
 
@@ -125,25 +125,36 @@ for (i in 1:length(dapc_l)) {
              year = fct_relevel(factor(year), c("2014", "2019", "2021")))
     }
   
+  write.csv(dapc2plot, file=paste0(PATH, "/results_tables/DAPC_res/", ind.names[[p]], "_K", my_k[[i]],".csv"), row.names = F)
+  
   if ("LD2" %in% colnames(dapc2plot) == FALSE) { 
     
-    #lol
+    pca <- ggplot() + 
+      geom_density(data = dapc2plot %>% group_by(Group), aes(x=LD1, fill=Group, group=Group), color="black", alpha=0.5, show.legend = F) +
+      # geom_tile(data = dapc2plot, aes(x=LD1, y=0, color=pop), size=2, alpha=0.5, height=0.05) +
+      geom_segment(data=dapc2plot, aes(x=LD1, xend=LD1, y=-0.01, yend=0.05, color=pop), size=3, alpha=0.8, show.legend = F) +
+      labs(x="LD1", y="Density", title = paste0("K = ", my_k[i])) +
+      scale_fill_manual(values = grays[c(1,3)]) +
+      scale_color_manual(values = aztf.pal, aesthetics = "color") +
+      theme(legend.position = "none", 
+            panel.background = element_blank(), 
+            panel.grid.major = element_line(colour = "gray", linetype = 4))
     
     } else {  
 
-  pca <- ggplot() +
-    stat_ellipse(data = dapc2plot, aes(x=LD1, y=LD2, fill=pop, group=pop), geom="polygon", type = "t", alpha = 0.5, size=1, level = 0.9) +
-    stat_ellipse(data = dapc2plot, aes(x=LD1, y=LD2, color=Group, group=Group), type = "t", alpha = 0.95, size=1, level = 0.9) +
-    geom_point(data = dapc2plot, aes(x=LD1, y=LD2, fill=pop, shape=year), color="black", size=2.3, alpha=0.7) +
-    # geom_point(data = dapc2plot %>% filter(Group == 2), aes(x=LD1, y=LD2, fill=pop, shape=year), color="black", size=4.5, alpha=0.5) +
-    labs(x="LD1", y="LD2", fill="Pond", color="Group", shape="Year", title=paste0("K = ", my_k[i])) +
-    scale_fill_manual(values = aztf.pal, aesthetics = "fill") +
-    # scale_color_manual(values = aztf.pal, aesthetics = "color") +
-    guides(fill = guide_legend(override.aes=list(shape=21)), color="none") +
-    scale_shape_manual(values = c(21, 22, 23)) +
-    theme(legend.position = "bottom", 
-          panel.background = element_blank(), 
-          panel.grid.major = element_line(colour = "gray", linetype = 4))
+    pca <- ggplot() +
+      stat_ellipse(data = dapc2plot, aes(x=LD1, y=LD2, fill=pop, group=pop), geom="polygon", type = "t", alpha = 0.5, size=1, level = 0.9) +
+      stat_ellipse(data = dapc2plot, aes(x=LD1, y=LD2, color=Group, group=Group), type = "t", alpha = 0.95, size=1, level = 0.9) +
+      geom_point(data = dapc2plot, aes(x=LD1, y=LD2, fill=pop, shape=year), color="black", size=2.3, alpha=0.7) +
+      # geom_point(data = dapc2plot %>% filter(Group == 2), aes(x=LD1, y=LD2, fill=pop, shape=year), color="black", size=4.5, alpha=0.5) +
+      labs(x="LD1", y="LD2", fill="Pond", color="Group", shape="Year", title=paste0("K = ", my_k[i])) +
+      scale_fill_manual(values = aztf.pal, aesthetics = "fill") +
+      # scale_color_manual(values = aztf.pal, aesthetics = "color") +
+      guides(fill = guide_legend(override.aes=list(shape=21)), color="none") +
+      scale_shape_manual(values = c(21, 22, 23)) +
+      theme(legend.position = "bottom", 
+            panel.background = element_blank(), 
+            panel.grid.major = element_line(colour = "gray", linetype = 4))
   
     }
   
