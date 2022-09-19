@@ -296,21 +296,6 @@ for (i in 1:length(ind.list)) {
   b.g <- chao_bootstrap(ind.list[[i]], nreps = 10000)
   b.gd <- summarise_bootstrap(b.g, Gst_Hedrick)
   gst.list[[i]] <- b.gd
-  
-  pop_dist <- dist(ind.list[[i]]@other$xy, method="euclidean")
-  az.pw_G <- pairwise_Gst_Hedrick(ind.list[[i]], linearized = TRUE)
-  
-  daz.pw_G <- round(as.data.frame(as.matrix(az.pw_G)),3)
-  daz.pw_G[upper.tri(daz.pw_G)] <- NA
-  write.csv(daz.pw_G, file = paste0(PATH, "/results_tables/", ind.names[[i]], "_pairwiseGst.csv"))
-  
-  mr <- mantel.rtest(az.pw_G, log(pop_dist), 999)
-  fit <- lm(as.vector(az.pw_G) ~ as.vector(pop_dist))
-  png(filename = paste0(PATH, "/figures/Dist_x_Gst_", ind.names[[i]], ".png"))
-  plot(as.vector(pop_dist), as.vector(az.pw_G), ylab="pairwise Gst", xlab="euc. distance", main=ind.names[[i]])
-  abline(fit)
-  mtext(paste0("p val =", mr$pvalue), side = 3)
-  dev.off()
 }
 
 global.gst <- as.data.frame(t(gst.list[[1]]$summary.global.het))

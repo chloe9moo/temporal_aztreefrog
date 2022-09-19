@@ -1,5 +1,6 @@
-# loading and preparing the dataset to be sourced at the beginning of each script
-#which year grouping do you want?
+##TITLE: Source code for loading diff. groupings of the genetic data
+##AUTHOR: C. E. Moore
+##Updated on 15 SEP 2022
 
 #load in data
 aztf <- read.csv(paste0(PATH, "/microsat_data/final_aztf_loci_nosibs.csv"))

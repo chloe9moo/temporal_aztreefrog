@@ -1,7 +1,13 @@
 ---
-title: "Genetic Diversity"
+title: "Genetic Structure Results"
 author: "C. E. Moore"
-output: pdf_document
+output: 
+  pdf_document:
+    latex_engine: pdflatex
+urlcolor: blue
+header-includes:
+  \usepackage{helvet}
+  \renewcommand{\familydefault}{\sfdefault}
 ---
 Last updated on `r Sys.Date()`  
   
@@ -11,7 +17,8 @@ Last updated on `r Sys.Date()`
 1. Allelic Richness  
 2. Hobs & Hexp  
 3. Allele frequencies  
-4. Effective population size
+4. Effective population size  
+5. Inbreeding  
   
 ```{r paths and data load, echo=FALSE, message=FALSE}
 ## packages
@@ -26,7 +33,7 @@ source(file = paste0(PATH, "/code/01c_DataLoad.R"))
 
 ***  
 # Rarefied Allelic Richness
-``` {r, echo=FALSE}
+``` {r AR, echo=FALSE}
 #for rarefied ->  finds lowest valid sample size across pops + loci and multiplies it by the ploidy (2)
 ar.list <- list()
 
@@ -55,8 +62,7 @@ ar.div <- bind_rows(ar.list) %>%
 
 write.csv(ar.div, file = paste0(PATH, "/results_tables/allelic_richness.csv"), row.names = F)
 ```
-
-``` {r ar fig, echo=F, fig.align="center"}
+```{r theme set up, echo=F}
 dtheme <- list(
   geom_line(aes(color=pop)),
   geom_point(aes(color=pop)),
@@ -74,7 +80,9 @@ dtheme <- list(
         axis.line.x.bottom = element_line(color="black"),
         axis.line.y.left = element_line(color="black"))
 )
+```
 
+``` {r ar fig, echo=F, fig.align="center", eval=F}
 p.ar <- ggplot(data = ar.div %>% filter(!group %in% c("All_Yrs", "All_Pops")), aes(x=group, y=m.ar, group=pop)) +
   labs(x="Sample Year", y="Rarefied Allelic Richness") +
   dtheme +
@@ -83,10 +91,16 @@ p.ar <- ggplot(data = ar.div %>% filter(!group %in% c("All_Yrs", "All_Pops")), a
 p.ar
 ggsave(filename = paste0(PATH, "/figures/delta_allelicrichness_nolegend.png"), plot = p.ar, width = 3, height = 5.45)
 ```
+\begin{figure}[!h]
+\centering
+\includegraphics[width=0.5\textwidth]{"/home/chloe9mo/Documents/Projects/temporal_aztreefrog//figures/delta_allelicrichness_nolegend.png"}
+\caption{Change in allelic richness over time.}
+\end{figure}
+
 ***  
 
 # Observed & Expected Heterozygosity  
-``` {r hobs hexp, echo=FALSE}
+``` {r hobs hexp, echo=FALSE, results='asis'}
 div.list <- list()
 for (i in 1: length(ind.list)) {
   
@@ -95,9 +109,9 @@ for (i in 1: length(ind.list)) {
   Hexp <- t(sapply(seppop(ind.list[[i]]), function(ls) summary(ls)$Hexp))
   
   cat(" exp. H for", ind.names[[i]], "\n")
-  print(as.data.frame(round(Hexp, 2)))
+  print(kable(as.data.frame(round(Hexp, 2))))
   cat("\n", " obs. H for", ind.names[[i]], "\n")
-  print(as.data.frame(round(Hobs, 2)))
+  print(kable(as.data.frame(round(Hobs, 2))))
   cat("\n")
   
   a.hexp <- as.data.frame(apply(Hexp, 1, mean)) %>% rownames_to_column(var = "pop")
@@ -233,7 +247,7 @@ ggplot(data = Net, aes(x=year, y=Ne, group=pond)) +
   scale_x_discrete(expand = c(0.01,0.01))
 ```
 
-``` {r, echo=F, message=F, fig.align="center"}
+``` {r, echo=F, message=F, fig.align="center", eval=F}
 library(sf); library(ggmap); library(cowplot); library(RColorBrewer)
 sp.ne <- coord %>%
   left_join(Net, by=c("year_pop" = "Pop")) %>%
@@ -413,9 +427,25 @@ p14_21
 # ggsave(filename = paste0(PATH, "/figures/Ne_change_map_14-21.png"), plot = p14_21)
 ```
 
-# Ne vs Sample Size  
+\begin{figure}[!ht]
+  \centering
+  \includegraphics[width=0.4\textwidth]{"/home/chloe9mo/Documents/Projects/temporal_aztreefrog/figures/Ne_map_2014.png"}
+  \includegraphics[width=0.4\textwidth]{"/home/chloe9mo/Documents/Projects/temporal_aztreefrog/figures/Ne_map_2019.png"}
+  \includegraphics[width=0.4\textwidth]{"/home/chloe9mo/Documents/Projects/temporal_aztreefrog/figures/Ne_map_2021.png"}
+  \caption{Individual year effective population size (LDNe).}
+\end{figure}
 
-``` {r, echo=F}
+\begin{figure}[!hb]
+  \centering
+  \includegraphics[width=0.4\textwidth]{"/home/chloe9mo/Documents/Projects/temporal_aztreefrog/figures/Ne_change_map_14-19.png"}
+  \includegraphics[width=0.4\textwidth]{"/home/chloe9mo/Documents/Projects/temporal_aztreefrog/figures/Ne_change_map_19-21.png"}
+  \includegraphics[width=0.4\textwidth]{"/home/chloe9mo/Documents/Projects/temporal_aztreefrog/figures/Ne_change_map_14-21.png"}
+  \caption{Effective population size difference between years.}
+\end{figure}
+
+## Ne vs Sample Size  
+
+``` {r, echo=F, eval=F}
 coord <- read.csv(paste0(PATH, "/pond_coordinates.csv")) %>% st_as_sf(coords=c("lon", "lat"), crs=st_crs(32612))
 sumdat <- read.csv(paste0(PATH,"/HYWR_multiyear_popsumm.csv"))
 tot <- read.csv(paste0(PATH,"/multiyear_hywr_tracking.csv"))
@@ -486,3 +516,71 @@ plot_grid(ps, pns, align = "h")
 # ggsave(filename = paste0(PATH,"/figures/NevsSibs.png"), plot = ps, width = 5, height = 5)
 # ggsave(filename = paste0(PATH,"/figures/NevsNoSibs.png"), plot = pns, width = 5, height = 5)
 ```
+
+\begin{figure}[ht!]
+  \centering
+  \includegraphics[width=0.4\textwidth]{"/home/chloe9mo/Documents/Projects/temporal_aztreefrog/figures/NevsNoSibs.png"}
+  \includegraphics[width=0.4\textwidth]{"/home/chloe9mo/Documents/Projects/temporal_aztreefrog/figures/NevsSibs.png"}
+  \caption{Relationship between effective population size and sample size.}
+\end{figure}
+
+# Inbreeding estimates  
+
+``` {r inbreeding, echo=F, message=F, eval=F}
+Fbar <- vector("list", length = length(ind.list))
+
+#calc likelihood based estimation of inbreeding
+for (i in 1:length(ind.list)) {
+
+  temp <- inbreeding(ind.list[[i]], N=100)
+  Fbar[[i]] <- sapply(temp, mean)
+
+}
+
+#compile into single dataframe
+Fbar.t <- Fbar[[1]] %>%
+  as.data.frame() %>%
+  rownames_to_column("sample") %>%
+  rename(Fbar = '.') %>%
+  mutate(group = ind.names[[1]])
+for (i in 2:length(Fbar)) {
+  temp <- Fbar[[i]] %>%
+    as.data.frame() %>%
+    rownames_to_column("sample") %>%
+    rename(Fbar = '.') %>%
+    mutate(group = ind.names[[i]])
+  Fbar.t <- bind_rows(Fbar.t, temp)
+}
+
+Fbar.t <- Fbar.t %>% 
+  group_by(group) %>%
+  mutate(n4 = sum(Fbar > 0.4))
+
+ip <- ggplot(Fbar.t %>% filter(!grepl("All Yrs", group)), aes(x=Fbar)) +
+  geom_histogram() +
+  geom_vline(aes(xintercept=0.4), color="red", linetype="dashed") +
+  facet_wrap(~ group) +
+  theme_bw() +
+  geom_text(data=Fbar.t %>% select(group, n4) %>% distinct() %>% filter(!grepl("All Yrs", group)), 
+            aes(x=0.6, y=35, label=paste0("N > 0.4 = \n", n4)))
+
+ggsave(paste0(PATH, "/figures/IndYear_InbreedingHist.png"), plot = ip)
+
+
+table((Fbar.t %>% filter(Fbar > 0.4, !grepl("All Yrs", group)) %>% left_join(aztf %>% select(ID, pop, year), by = c("sample" = "ID")))$pop)
+
+
+#look at plot of likelihood distribution
+# F <- inbreeding(ind.list[[i]], res.type="function")[which(Fbar>0.4)]
+# 
+# plot(F$`2014-MCM-0032`, main=paste("Inbreeding of individual",names(F)),
+# xlab="Inbreeding (F)", ylab="Probability density")
+# plot(F$`2014-MCM-0056`, add=T, col="red")
+# plot(F$`2014-MCM-0296`, add=T, col="blue")
+```
+
+\begin{figure}[hb!]
+  \centering
+  \includegraphics[width=0.6\textwidth]{"/home/chloe9mo/Documents/Projects/temporal_aztreefrog/figures/IndYear_InbreedingHist.png"}
+  \caption{Estimate of individuals with high likelihood of inbreeding. Fbar > 0.4 indicates likely inbred. Population 8 most consistently has degree of inbreeding.}
+\end{figure}

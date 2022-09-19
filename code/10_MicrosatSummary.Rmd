@@ -1,7 +1,13 @@
 ---
-title: "Summary of Microsat Data"
+title: "Basic Microsat Summary Results"
 author: "C. E. Moore"
-output: pdf_document
+output: 
+  pdf_document:
+    latex_engine: pdflatex
+urlcolor: blue
+header-includes:
+  \usepackage{helvet}
+  \renewcommand{\familydefault}{\sfdefault}
 ---
 Last updated on `r Sys.Date()`  
 *Note: Microsat data previously formatted from geneious output using 01a_DataPrep.R*  
@@ -74,21 +80,17 @@ sumdat <- aztf %>% select(year, pop) %>%
   replace(is.na(.), 0) %>%
   mutate(TotSamp = rowSums(across(.cols = c('2014','2019','2021'))))
 
-kable(sumdat, caption = "Population sample summary")
-cat("Population sample range post filter is", min(sumdat[,2:4][sumdat[,2:4] > 0]), "-", max(sumdat[,2:4][sumdat[,2:4] > 0]), "\n",
-    "Population sample mean post filter is", mean(sumdat[,2:4][sumdat[,2:4] > 0]), "\n")
+kable(sumdat, caption = paste0("Population sample summary. Range post filter is ", min(sumdat[,2:4][sumdat[,2:4] > 0]), " - ", max(sumdat[,2:4][sumdat[,2:4] > 0]), ". Mean is ", mean(sumdat[,2:4][sumdat[,2:4] > 0]), "."))
 ```
-***
 
-# Basic pop. gen. summary of microsats  
-```{r ind data summary, echo=FALSE, warning=FALSE}
+```{r ind data summary, echo=FALSE, warning=FALSE, message=FALSE}
 kable(
 (aztf %>% group_by(year, pop) %>% 
   summarise(Sum = n()) %>% tidyr::spread(pop, Sum, fill = 0) %>% 
   mutate(total = rowSums(across(everything())))), caption = "N individuals per pop + year post filter and sibling removal"
 )
 
-cat("Individual Summaries", "\n")
+cat("Individual Group Microsat Summaries", "\n")
 for (i in 1:length(ind.list)) {
   
   cat("--------------------------------------------", "\n", ind.names[[i]])
@@ -97,7 +99,7 @@ for (i in 1:length(ind.list)) {
   
 }
 
-cat("Population Summaries", "\n")
+cat("Population Group Summaries", "\n")
 for (i in 1:length(pop.list)) {
   
   cat("--------------------------------------------","\n",pop.names[[i]])
@@ -126,6 +128,8 @@ barplot(summ.list[[1]]$n.by.pop, main="Pop sample size by pop", ylab="Number of 
 barplot(summ.list[[2]]$n.by.pop, main="Pop sample size by year", ylab="Number of genotypes",las=3)
 ```
   
+\bigbreak
+\bigbreak
 **Is mean observed H significantly lower than mean expected H?**  
 Null hypothesis being that there is no difference, so sig. p means reject the null of no diff    
 *Both global sets should be the same.*  
@@ -150,13 +154,14 @@ cat("----------------------------------------", "\n", "2019 vs 2021")
 t.test(summ.list[[4]]$Hobs, summ.list[[5]]$Hobs, pair=T, var.equal=TRUE, alter="greater")
 
 ```
-**Notes:** Yes, Hobs is sig. lower than Hexp in global, 2019, and 2015 sets, not so much in 2021  
+**Notes:** Yes, Hobs is sig. lower than Hexp in global, 2019, and 2015 sets, not so much in 2021.  
 *Diversity likely not sig. different between years though!*  
+\bigbreak
 
 ***  
 # Testing for HWE  
 #### Global HWE  
-
+\smallbreak
 *1000 bootstrap MC*  
 ``` {r global HWE, message=FALSE, echo=FALSE}
 globalHWE.list <- lapply(ind.list, function(x) {
@@ -179,6 +184,7 @@ kable(globalHWE[,c(13:16)], caption = "Global HWE in 2021")
 **Notes:** Most loci out of HWE except primarily for hwri34484, hwri4269, hwri2932 across years and in 2015, but 2019 and 2021 have several loci not?  
 
 #### HWE by Pop / Yr  
+\smallbreak  
 *alpha = 0.05*  
 ``` {r, echo=F}
 alpha <- 0.05
@@ -213,6 +219,7 @@ for (i in 1:length(ind.list)) {
 rm(pop.hwt, pop.hwt.chi, alpha, Chisq.fdr, MC.fdr)
 ```
 **Notes:** Doesn't seem to be any population or loci consistently out of HWE, but 2015 in the year grouping seems high? hwri30594 highest across all years + groups, but I think correcting for fdr shows it's not a concern.  
+\bigbreak
 
 ***
 
@@ -237,6 +244,7 @@ for (i in 2:length(ind.list)) { #first two are the same, so starting on second
 ```
 
 **Notes:** hwri20812 and hwri30594 seem to be the most consistently linked, but at 0.15/0.16, is that concerningly high? Or low enough to move on? I think low enough to move on based on https://blog.goldenhelix.com/determining-best-ld-pruning-options/  
+\bigbreak
 
 ***
 

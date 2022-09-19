@@ -1,4 +1,7 @@
-# STRUCTURE like plot creation
+##TITLE: DAPC Analyses
+##AUTHOR: C. E. Moore
+##Updated on 15 SEP 2022
+
 library(tidyverse); library(adegenet); library(ggpubr)
 # library(ggh4x); library(paletteer); library(cowplot)
 

@@ -1,8 +1,10 @@
-## Cleaning + getting geographic info from all years
+##TITLE: Prepping spatial data for downstream analyses
+##AUTHOR: C. E. Moore
+##Updated on 15 SEP 2022
 
-library(tidyverse); library(sf); library(mapview)
+library(tidyverse); library(sf); library(mapview); library(adegenet)
 
-
+# set up ----
 PATH <- "/home/chloe9mo/Documents/Projects/temporal_aztreefrog"
 source(file = paste0(PATH, "/code/01c_DataLoad.R"))
 
@@ -31,7 +33,7 @@ mapview(pop.dat, zcol="Year.Sampled", legend=T)
 # dat[dat$Pond.Name == "Duncan Tank", c("Pond.Number")] <- "25"
 
 
-#summarizing
+#summarizing ----
 sumdat <- aztf %>% select(year, pop) %>%
   count(year, pop) %>%
   pivot_wider(id_cols=pop, names_from = year, values_from=n) %>%
@@ -56,7 +58,7 @@ write.csv(sumdat, file = paste0(PATH,"/HYWR_multiyear_popsumm.csv"), row.names =
 # dat.fix.sf <- st_as_sf(dat.fix, coords = c("UTME","UTMN"), crs=32612)
 # dat.fix.sf %>% select(Pond.Number) %>% unique() %>% mapview(., legend=F)
 
-
+#pond coords ----
 xy <- dat %>% dplyr::select(Pond.Number, UTME, UTMN) %>% unique()
 xy <- st_as_sf(xy, coords = c("UTME", "UTMN"), crs = 32612) #crs is WGS 84, UTM zone 12N
 #checking it worked
@@ -88,6 +90,7 @@ write.csv(xy.ll, file=paste0(PATH, "/pond_coordinates.csv"), row.names = F)
 # 
 # elev <- crop(elev, e)
 
+#sample extent maps ----
 library(sf); library(ggmap); library(cowplot)
 coord <- read.csv(paste0(PATH, "/pond_coordinates.csv")) %>% st_as_sf(coords=c("lon", "lat"), crs=st_crs(32612))
 coord <- coord %>%
@@ -211,3 +214,148 @@ ggsave(filename = paste0(PATH,"/figures/aztf_samplemap_2019.png"), plot = pm3, w
 ggsave(filename = paste0(PATH,"/figures/aztf_samplemap_2021.png"), plot = pm4, width = 6.3, height = 6.5)
 ggsave(filename = paste0(PATH,"/figures/aztf_samplemap_total.png"), plot = pm5, width = 7, height = 7)
 
+
+#kmz to point for network creation ----
+sp.coord <- st_as_sf(coord, coords = c("lon", "lat"), crs = 4326) #pond coordinates w/ any samples
+net <- lapply(list.files(paste0(PATH, "/spatial_data"), pattern = "Huachuca", full.names = T), st_read) %>% #huachuca ponds id'ed by traci
+  bind_rows() %>%
+  st_zm() %>%
+  st_transform(st_crs(sp.coord))
+
+rd.net <- st_filter(net, sp.coord %>%
+                      st_buffer(7000) %>% #7 km like parsley et al 2020
+                      st_union() %>%
+                      st_make_valid()) %>%
+  select(Name, geometry)
+st_write(rd.net, paste0(PATH, "/spatial_data/huachuca_network_ponds.shp"), delete_dsn = T)
+
+rm(net)
+
+#stream dist between sites ----
+library(riverdist)
+
+#decided to go into qgis and select the important flowlines instead
+#the full nhd is ~20 G of mem btw
+# nhd <- st_read("~/Documents/Projects/PNW_fishes/NHD/NHDPlusV21_NationalData_Seamless_Geodatabase_Lower48_07/NHDPlusNationalData/NHDPlusV21_National_Seamless_Flattened_Lower48.gdb", layer = "NHDFlowline_Network")
+# nhd <- st_filter(nhd, sp.coord %>%
+#                    st_buffer(100000) %>% #7 km like parsley et al 2020
+#                    st_union() %>%
+#                    st_make_valid() %>%
+#                    st_transform(st_crs(nhd))) %>% 
+#   st_zm()
+# st_write(nhd, paste0(PATH, "/spatial_data/huachuca_nhdflowline.shp"), delete_dsn=T)
+
+##load in for package
+nhd <- line2network(path=paste0(PATH, "/spatial_data"), layer="aztf_streamnetwork",
+                    reproject = "+proj=aea +lat_1=20 +lat_2=60 +lat_0=40 +lon_0=-96 +x_0=0 +y_0=0 +datum=NAD83 +units=m +no_defs")
+nhd_fixed <- cleanup(nhd)
+saveRDS(nhd_fixed, file=paste0(PATH, "/spatial_data/aztf_streamnetwork_fixed.rds"))
+
+rd.pt.c <- sp.coord %>% 
+  st_transform("+proj=aea +lat_1=20 +lat_2=60 +lat_0=40 +lon_0=-96 +x_0=0 +y_0=0 +datum=NAD83 +units=m +no_defs") %>%
+  mutate(lon = st_coordinates(.)[,"X"],
+         lat = st_coordinates(.)[,"Y"]) %>%
+  select(-year_pop) %>%
+  filter(pop %in% aztf$pop) %>%
+  filter(!pop %in% c(7, 9)) %>% #these are closer to a different river network, probably need to find distance between them tho
+  distinct()
+rd.pt <- xy2segvert(x=rd.pt.c$lon, y=rd.pt.c$lat, rivers = nhd_fixed)
+rd.pt$id <- rd.pt.c$pop
+
+#plot to check
+points(rd.pt.c$lon, rd.pt.c$lat, pch=16, col="red")
+riverpoints(seg=rd.pt$seg, vert=rd.pt$vert, rivers=nhd_fixed, pch=15, col="blue")
+
+#dist matrix
+dmat <- riverdistancemat(rd.pt$seg, rd.pt$vert, nhd_fixed, ID=rd.pt$id)
+write.csv(dmat, file=paste0(PATH, "/results_tables/RiverDist_Matrix.csv"), row.names = T)
+
+#add back in other pops
+md <- max(dmat) * 10 #one order of magnitude greater than furthest stream distance for pops 7+9 and all others
+nhd_fixed2 <- trimriver(trimto = c(283, 284, 285), rivers=nhd) #only the relevant segments
+nhd_fixed2 <- cleanup(nhd_fixed2)
+rd.pt.c <- sp.coord %>% 
+  st_transform("+proj=aea +lat_1=20 +lat_2=60 +lat_0=40 +lon_0=-96 +x_0=0 +y_0=0 +datum=NAD83 +units=m +no_defs") %>%
+  mutate(lon = st_coordinates(.)[,"X"],
+         lat = st_coordinates(.)[,"Y"]) %>%
+  select(-year_pop) %>%
+  filter(pop %in% c(7, 9)) %>% #these are closer to a different river network, probably need to find distance between them tho
+  distinct()
+rd.pt <- xy2segvert(x=rd.pt.c$lon, y=rd.pt.c$lat, rivers = nhd_fixed2)
+rd.pt$id <- rd.pt.c$pop
+d2mat <- riverdistancemat(rd.pt$seg, rd.pt$vert, nhd_fixed, ID=rd.pt$id) %>% as.data.frame()
+
+
+dmat <- read.csv(paste0(PATH, "/results_tables/RiverDist_Matrix.csv"))
+d2mat[names(dmat)[names(dmat) != 'X']] <- md
+d2mat <- d2mat %>% 
+  rename_with(.cols = -contains("X"), ~ paste0("X", .)) %>%
+  rownames_to_column(var="pop")
+dmat <- dmat %>%
+  rename(pop = X) %>%
+  mutate('X7' = md, 'X9' = md, pop = as.character(pop))
+
+dmat <- full_join(dmat, d2mat)
+write.csv(dmat, file=paste0(PATH, "/results_tables/RiverDist_Matrix.csv"), row.names = T)
+
+#prep precip data ----
+library(terra); library(exactextractr)
+sp.coord <- st_as_sf(coord, coords = c("lon", "lat"), crs = 4326) #pond coordinates w/ any samples
+rd.net <- st_read(paste0(PATH, "/spatial_data/huachuca_network_ponds.shp")) #read in pond network
+
+pri.l <- list.files(path = paste0(PATH, "/spatial_data/prism"), pattern = "*.bil$", full.names = T)
+c.buff <- sp.coord %>% 
+  st_transform(st_crs(rast(pri.l[[1]]))) %>%
+  st_buffer(7000)
+s.buff <- sp.coord %>%
+  st_transform(st_crs(rast(pri.l[[1]]))) %>%
+  st_buffer(7000) %>%
+  st_union()
+
+for (i in 1:length(pri.l)) {
+  
+  pri <- rast(pri.l[[i]]) #get layer
+  yr <- paste0("ppt_", gsub("PRISM_ppt_stable_4kmM3_", "", names(pri)) %>% gsub("_bil", "", .)) #set year
+  ra <- exact_extract(pri, c.buff, "mean", weights = "area") #get average for each ind. site
+  c.buff <- c.buff %>% mutate(precip = ra) #add to df
+  names(c.buff)[names(c.buff) == "precip"] <- yr #set col name
+  
+  ra <- exact_extract(pri, s.buff, "mean", weights = "area") #get avg for all sites
+  sd <- exact_extract(pri, s.buff, "stdev", weights = "area") #get sd across all sites
+  
+  c.buff <- c.buff %>% mutate(precip = ra, stdev = sd) #add to df
+  names(c.buff)[names(c.buff) == "precip"] <- paste0(yr, "_all") #set col name
+  names(c.buff)[names(c.buff) == "stdev"] <- paste0(yr, "_all_sd") #set col name
+  
+}
+
+c.buff <- c.buff %>% 
+  rowwise() %>%
+  mutate(d21 = sd(c(ppt_2021, ppt_2020, ppt_2019)),
+        d19 = sd(c(ppt_2019, ppt_2018, ppt_2017)),
+        d14 = sd(c(ppt_2014, ppt_2013, ppt_2012))) %>% 
+  st_drop_geometry()
+write.csv(c.buff, paste0(PATH, "/spatial_data/Precip4Sites.csv"), row.names = F)
+
+#look at precip change over time
+precip.change <- data.frame(year = seq(2012, 2021, 1), ppt.a = NA, ppt.sd = NA)
+
+for (i in 1:nrow(precip.change)) {
+  yr <- precip.change[i,1]
+  tryCatch({ #if an error is thrown when trying to select the column, fill that cell with na
+    
+    c.buff %>% select(paste0("ppt_", yr, "_all"))
+    precip.change[i,2] <- (c.buff %>% select(paste0("ppt_", yr, "_all")) %>% st_drop_geometry() %>% distinct())[1,1]
+  
+    }, error=function(e) precip.change[i,2] <- NA)
+  tryCatch({ #if an error is thrown when trying to select the column, fill that cell with na
+    
+    c.buff %>% select(paste0("ppt_", yr, "_all_sd"))
+    precip.change[i,3] <- (c.buff %>% select(paste0("ppt_", yr, "_all_sd")) %>% st_drop_geometry() %>% distinct())[1,1]
+    
+  }, error=function(e) precip.change[i,3] <- NA)
+  
+}
+
+ggplot(data=na.omit(precip.change), aes(x=year, y=ppt.a)) + geom_point() + geom_line() + 
+  geom_errorbar(aes(ymin=ppt.a-ppt.sd, ymax=ppt.a+ppt.sd), size=0.1) + theme_classic()
