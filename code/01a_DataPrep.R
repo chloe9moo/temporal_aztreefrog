@@ -1,6 +1,6 @@
 ##TITLE: AZ treefrog: Microsat data prep and 2015 comparisons
 ##AUTHOR: C. E. Moore
-##Updated on 5 Oct 2021
+##Updated on SEP 29 2022
 
 #-------------------------------#
 #### Load in data, set paths ####
@@ -433,3 +433,7 @@ names(str) <- gsub("\\.2", "", names(str))
 str[str=="NA"] <- -1
 
 write.table(str, file=paste0(PATH,"/microsat_data/structure_loci.txt"), sep = '\t', row.names = F, quote = F)
+
+
+
+

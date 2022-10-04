@@ -25,14 +25,17 @@
 cd ~/Documents/Projects/console
 rm structure_loci.txt
 cp ../temporal_aztreefrog/microsat_data/structure_loci.txt ./
-sed -i '1d' structure_loci.txt
+sed -i '1d' structure_loci.txt #remove locus names
+#variables
+NUMK=24 #for full run, number of pops + 1
+REPS=10 #for full run, 10 reps of each K
 
 #make function for loop
 iter_struct () {
 	local k=$1
-	for i in {1..3..1}
+	for i in $(seq 1 $REPS)
 	do
-		./structure > runK${k}_r$i.txt -m mainparams_testing -K $k -o Year_Pop_K${k}_r$i
+		./structure > runK${k}_r$i.txt -m mainparams -K $k -o Year_Pop_K${k}_r$i
         	mv Year_Pop_K${k}_r${i}_f Output_Files/
 		mv runK${k}_r$i.txt Run_Files/
 	done
@@ -41,13 +44,37 @@ iter_struct () {
 }
 
 #run program
-#for k in {1..24..1} #seq 1 to 24 (k+1), by 1
-for k in 1 2
+for k in $(seq 1 $NUMK)
 do
 	iter_struct "$k" &
 done
 wait
 
-echo "STRUCTURE runs complete..." #why isn't it making it to this point??
+echo "STRUCTURE runs complete..."
+
+#pull in results
+rm iter_structure_results.csv
+printf "K\tRep\tMeanLnP_K\n" >> iter_structure_results.csv #make csv
+
+for k in $(seq 1 $NUMK)
+do
+	for rep in $(seq 1 $REPS)
+	do
+		#get line with LnP(K) value
+		LINE="$(grep -hnr "Estimated Ln Prob of Data" Output_Files/Year_Pop_K${k}_r${rep}_f)"
+		#get value
+		LnK=${LINE#*= }
+		#add to csv
+		printf "$k\t$rep\t$LnK\n" >> iter_structure_results.csv
+	done
+	wait
+	
+	echo "K=$k added to csv..."
+done
+wait
+
+echo "Results csv complete..."
+
+
 
 
