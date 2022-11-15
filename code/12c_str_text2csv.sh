@@ -5,9 +5,9 @@
 
 #set up
 cd ~/Documents/Projects/temporal_aztreefrog/structure_results
-tK=2   #set the most likely K calculated previously
+tK=3   #set the most likely K calculated previously
 tR=10  #set the rep from highest likelihood across reps
-RUN_FOLDER='K24' #set the run to pull from (basically the folder name)
+RUN_FOLDER='r2021' #set the run to pull from (basically the folder name)
 
 OUT_FILE=./${RUN_FOLDER}/Output_Files/Year_Pop_K${tK}_r${tR}_f
 
