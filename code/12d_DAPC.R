@@ -28,7 +28,7 @@ rm(yr.coord, ind_aztf_yr)
 
 #find clusters ----
 #will need to do this one by one
-p <- 1 #select set to run
+p <- 6 #select set to run
 
 #no real reason to choose low number of pc's
 grp <- find.clusters(ind.list[[p]], max.n.clust = length(levels(ind.list[[p]]@pop))+1, n.pca = 200)
@@ -38,6 +38,7 @@ table.value(table(pop(ind.list[[p]]), grp$grp), col.lab=paste("inf", 1:24),
             row.lab=paste("ori", 1:24))
 
 ##+ K BIC plot ----
+#grab bic values for each value of K, make a dataframe and turn it into a ggplot
 bic.m <- matrix(nrow = length(levels(ind.list[[p]]@pop))+1, ncol = length(levels(ind.list[[p]]@pop))+1)
 for(i in 1:length(levels(ind.list[[p]]@pop))+1){
   grp <- find.clusters(ind.list[[p]], n.pca = 200, choose.n.clust = FALSE,  max.n.clust = length(levels(ind.list[[p]]@pop))+1)
@@ -66,6 +67,7 @@ assignplot(dapc1, subset=1:50)
 dapc1 <- dapc(ind.list[[p]], grp$grp, n.da = 100, n.pca = 100)
 
 ##+ optimal pcs to retain based on a score ----
+dapc1 <- dapc(ind.list[[p]], grp$grp, n.da = 100, n.pca = 100)
 temp <- optim.a.score(dapc1)
 dapc1 <- dapc(ind.list[[p]], grp$grp, n.da=100, n.pca = temp$best)
 
@@ -86,7 +88,6 @@ for(i in 1:length(dapc_l)){
   #  dapc_l[[i]] <- dapc(gl_rubi, pop = grp_l[[i]]$grp, n.pca = 3, n.da = 2)
 }
 
-
 ##+ plotting ----
 ###++ set theme ----
 grays <- c("#CCCCCC", "#999999", "#333333")
@@ -105,6 +106,7 @@ pca.theme <- list(
 )
 
 ###++ make plot list ----
+# to compare clusters
 dplot_l <- vector(mode = "list", length = length(my_k))
 
 for (i in 1:length(dapc_l)) {
@@ -178,16 +180,100 @@ ggarrange(plotlist=dplot_l, p1,
 
 ggsave(filename = paste0(PATH, "/figures/DAPC_", ind.names[[p]], "_clustercomp.png"), plot = last_plot(), width = 8, height = 8)
 
+# change over time dapc ----
+# only relevant to year_pop grouping!
+#not using k clustering to assessing groups
+dapc.o <- dapc(ind.list[[6]], n.da = 100, n.pca = 100)
+temp <- optim.a.score(dapc.o)
+dapc.o <- dapc(ind.list[[6]], n.da = 100, n.pca = temp$best)
 
-##+ look at clustering another way ----
-my_pal <- RColorBrewer::brewer.pal(n=10, name = "Spectral")
+#make a dataframe from dapc output
+temp <- as.data.frame(dapc.o$ind.coord)
+temp$Group <- dapc.o$grp
 
-my_df <- as.data.frame(dapc_l[[ 6 ]]$ind.coord)
-my_df$Group <- dapc_l[[ 6 ]]$grp
+#make data frame legible 
+dapc2plot <- temp %>% 
+  mutate(ID = row.names(.)) %>% 
+  left_join(aztf, by = "ID") %>% 
+  select(ID, year, pop, Group, starts_with("LD")) %>%
+  mutate(pop = fct_relevel(factor(pop), c("1", "3", "4", "6", "7", "8", "9", "10", "16")),
+         year = fct_relevel(factor(year), c("2014", "2019", "2021")))
 
-p2 <- ggplot(my_df, aes(x = LD1, y = LD2, color = Group, fill = Group)) + 
-  geom_point(size = 4, shape = 21) + 
-  theme_bw() + 
-  scale_color_manual(values=c(my_pal)) + 
-  scale_fill_manual(values=c(paste(my_pal, "66", sep = "")))
-p2
+#save
+write.csv(dapc2plot, file=paste0(PATH, "/results_tables/DAPC_res/Year_Pop_Grp.csv"), row.names = F)
+
+#plot it
+##set axis to plot
+axis1 <- "LD1"
+axis2 <- "LD2"
+##get group center
+centroids <- as.data.frame(dapc.o$grp.coord) %>% mutate(year_pop = row.names(.)) %>%
+  left_join(., dapc2plot %>% select(year, pop, Group), by=c("year_pop" = "Group")) %>% 
+  distinct() %>%
+  complete(., year, pop, fill = list(V1 = NA, V1 = NA)) %>%
+  group_by(pop)
+
+ggplot() +
+  stat_ellipse(data = dapc2plot, aes(x=.data[[axis1]], y=.data[[axis2]], fill=pop, group=pop), geom="polygon", type = "t", alpha = 0.4, size=1, level = 0.9, show.legend = F) +
+  # stat_ellipse(data = dapc2plot, aes(x=.data[[axis1]], y=.data[[axis2]], color=pop, group=Group), type = "t", alpha = 0.95, size=0.5, level = 0.9) +
+##plot with all individuals, label for year_pop
+  # geom_point(data = dapc2plot, aes(x=.data[[axis1]], y=.data[[axis2]], fill=pop, shape=year), size=2.3, alpha=0.3, show.legend = F) +
+  # geom_label(data = centroids, aes(x=V1, y=V2, label=centroids[,1])) +
+  # scale_color_manual(values = aztf.pal, aesthetics = "color") +
+  # scale_shape_manual(values = c(16, 15, 17)) +
+##plot with only year_pop centroid
+  geom_point(data = centroids, aes(x=.data[[axis1]], y=.data[[axis2]], fill=pop, shape=year), size=5, alpha=1) +
+  geom_path(data = centroids, aes(x=.data[[axis1]], y=.data[[axis2]], group = pop), arrow = arrow(type = "closed", length=unit(0.075, "inches"))) +
+  geom_path(data = centroids %>% filter(!(year == "2019" & is.na(year_pop))), aes(x=.data[[axis1]], y=.data[[axis2]], group = pop), arrow = arrow(type = "closed", length=unit(0.075, "inches"))) +
+  scale_fill_manual(values = aztf.pal, aesthetics = "fill") +
+  scale_shape_manual(values = c(21, 22, 23)) +
+  guides(fill = guide_legend(override.aes=list(shape=21)), color="none") +
+##use in every plot
+  labs(x=axis1, y=axis2, fill="Pond", color="Group", shape="Year", title="Population change over time") +
+  theme(legend.position = "right", 
+        panel.background = element_blank(), 
+        panel.grid.major = element_line(colour = "gray", linetype = 4),
+        legend.key = element_blank())
+ggsave(filename = paste0(PATH, "/figures/DAPC_All_OverTime.png"), plot = last_plot(), width = 7, height = 7)
+
+#first discriminant function only density plot
+dens.ld1 <- list(
+  labs(x="LD1", y="Density"),
+  xlim(-4, 4),
+  ylim(0, 0.85),
+  scale_fill_manual(values = aztf.pal, aesthetics = "fill"),
+  scale_color_manual(values = aztf.pal, aesthetics = "color"),
+  theme(legend.position = "none", 
+        panel.background = element_blank(), 
+        panel.grid.major = element_line(color = "gray", linetype = 4))
+)
+p14 <- ggplot() + 
+  geom_density(data = dapc2plot %>% filter(year == "2014") %>% group_by(pop), 
+               aes(x=LD1, fill=pop, group=pop, color=pop), size=1.2, alpha=0.5, show.legend = F) +
+  dens.ld1 +
+  theme(axis.ticks.x = element_blank(), axis.text.x = element_blank()) + labs(x="", y="")
+p19 <- ggplot() + 
+  geom_density(data = dapc2plot %>% filter(year == "2019") %>% group_by(pop), 
+               aes(x=LD1, fill=pop, group=pop, color=pop), size=1.2, alpha=0.5, show.legend = F) +
+  dens.ld1 +
+  theme(axis.ticks.x = element_blank(), axis.text.x = element_blank()) + xlab("")
+p21 <- ggplot() + 
+  geom_density(data = dapc2plot %>% filter(year == "2021") %>% group_by(pop), 
+               aes(x=LD1, fill=pop, group=pop, color=pop), size=1.2, alpha=0.5, show.legend = F) +
+  dens.ld1 +
+  ylab("")
+ggarrange(p14, p19, p21, ncol = 1, labels = c("2014", "2019", "2021"), label.x = 0.04, font.label = list(size=18))
+ggsave(filename = paste0(PATH, "/figures/DAPC_All_LD1only.png"), plot=last_plot(), height = 8, width = 8)
+
+# look at clustering another way ----
+# my_pal <- RColorBrewer::brewer.pal(n=10, name = "Spectral")
+# 
+# my_df <- as.data.frame(dapc_l[[ 6 ]]$ind.coord)
+# my_df$Group <- dapc_l[[ 6 ]]$grp
+# 
+# p2 <- ggplot(my_df, aes(x = LD1, y = LD2, color = Group, fill = Group)) + 
+#   geom_point(size = 4, shape = 21) + 
+#   theme_bw() + 
+#   scale_color_manual(values=c(my_pal)) + 
+#   scale_fill_manual(values=c(paste(my_pal, "66", sep = "")))
+# p2

@@ -6,7 +6,7 @@
 aztf <- read.csv(paste0(PATH, "/microsat_data/final_aztf_loci_nosibs.csv"))
 aztf <- aztf %>% mutate(year = ifelse(year == 2018, 2019, year)) %>%
   mutate(year = ifelse(year == 2015, 2014, year))
-coord <- read.csv(paste0(PATH, "/pond_coordinates.csv"))
+coord <- read.csv(paste0(PATH, "/pond_coordinates.csv")) %>% arrange(pop)
 pop.coord <- coord %>% dplyr::select(pop, lon, lat) %>% unique() %>% remove_rownames() %>% column_to_rownames("pop")
 
 ind_aztf_pop <- df2genind(aztf[,c(6:22)], sep = "/", ind.names = aztf$ID, NA.char = "-1/-1")
@@ -46,15 +46,22 @@ pop.list <- list(pop_aztf_pop, pop_aztf_yr, pop2015, pop2019, pop2021)
 pop.names <- list("All Yrs - Pop x Pop", "All Yrs - Pop x Year", "Pop 2014", "Pop 2019", "Pop 2021")
 
 #color palette
-aztf.pal <- c("1" = "#28231D", 
+aztf.pal <- c("1" = "#E9D097", 
               "3" = "#5E2D30", 
-              "4" = "#008E90", 
+              "4" = "#C5A387", 
               "6" = "#5cc589", 
-              "7" = "#1C77A3", 
-              "8" = "#C5A387",
-              "9" = "#67B8D6", 
-              "10" = "#E9D097", 
-              "16" = "#283F79")
+              "7" = "#67B8D6", 
+              "8" = "#1C77A3",
+              "9" = "#008E90", 
+              "10" = "#283F79", 
+              "16" = "#28231D")
+
+#color testing:
+# as.data.frame(aztf.pal) %>% rename(color = aztf.pal) %>% mutate(pop = row.names(.)) %>% 
+#   mutate(pop = fct_relevel(factor(pop), c("1", "3", "4", "6", "7", "8", "9", "10", "16"))) %>%
+#   ggplot(aes(x=pop)) +
+#   geom_bar(aes(fill=pop), show.legend = F) +
+#   scale_fill_manual(values = aztf.pal)
 
 #remove extras
 rm(ind_aztf_pop, ind_aztf_yr, ind2015, ind2019, ind2021, 

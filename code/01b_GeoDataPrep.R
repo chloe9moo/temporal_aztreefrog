@@ -189,8 +189,8 @@ pm4
 
 pm5 <- ggmap(az.base) +
   geom_sf(data = coord, aes(fill=pop, size=TotSamp), color="black", shape=21, inherit.aes = F) +
-  geom_sf_text(data = coord %>% filter(pop %in% c("4", "6", "7", "8", "9", "10")), aes(label=pop), color="black", inherit.aes = F) +
-  geom_sf_text(data = coord %>% filter(pop %in% c("1", "3", "16")), aes(label=pop), color="white", inherit.aes = F) +
+  geom_sf_text(data = coord %>% filter(pop %in% c("4", "6", "7", "8", "9", "1")), aes(label=pop), color="black", inherit.aes = F) +
+  geom_sf_text(data = coord %>% filter(pop %in% c("10", "3", "16")), aes(label=pop), color="white", inherit.aes = F) +
   ggtitle("Total Samples") +
   scale_size_continuous(range = c(2, 12), guide = "legend",
                         limits=c(10, 105),

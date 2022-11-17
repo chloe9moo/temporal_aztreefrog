@@ -1,5 +1,5 @@
 ---
-title: "Genetic Structure Results"
+title: "Genetic Diversity Results"
 author: "C. E. Moore"
 output: 
   pdf_document:

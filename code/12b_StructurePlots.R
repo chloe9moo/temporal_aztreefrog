@@ -56,15 +56,15 @@ delta_K <- function (x) {
   return(dKc)
 }
 
-set_cluster_df <- function(x, year = 'all') {
+set_cluster_df <- function(x, subset = 'all') {
   # set year to grab the correct keys for relabeling the inferred ancestry
   # if nothing is specified, it will load the full set (all years + pops)
-  if (year == 'all') {
+  if (subset == 'all') {
     ind.key <- read.csv(paste0(PATH, "/microsat_data/ind_key4structure.csv"))
     cat("Using all years, all pops for key\n")
   } else {
-    ind.key <- read.csv(paste0(PATH, "/microsat_data/ind_key4structure_", year, ".csv"))
-    cat("Using", year, "for key\n")
+    ind.key <- read.csv(paste0(PATH, "/microsat_data/ind_key4structure_", subset, ".csv"))
+    cat("Using", subset, "for key\n")
   }
   
   #reformat dataframe from structure output and 12c_str_text2csv.sh
@@ -236,11 +236,11 @@ ggsave(paste0(PATH, "/structure_results/figures/strct_2014_K3.png"), plot = last
 ##//+ delta K calc----
 str_out <- read.delim(paste0(PATH, "/structure_results/r2015/r134/iter_structure_results.csv"), header = T, sep = "\t")
 K_out <- delta_K(str_out)
-write.csv(K_out, paste0(PATH, "/results_tables/structure_deltaK2015_maxK9.csv"), row.names = F)
+write.csv(K_out, paste0(PATH, "/results_tables/structure_deltaK2015_pop134.csv"), row.names = F)
 
-##+ read STRUCTURE output ----
+##//+ read STRUCTURE output ----
 #based on highest delta K
-K_out <- read.csv(paste0(PATH, "/results_tables/structure_deltaK2015_maxK9.csv"))
+K_out <- read.csv(paste0(PATH, "/results_tables/structure_deltaK2015_pop134.csv"))
 maxK <- K_out %>% slice_max(deltaK) %>% pull(K)
 str_out %>% filter(K == maxK) %>% slice_max(MeanLnP_K, n=1) #selecting which rep to visualize
 # str_out %>% filter(K == 3) %>% slice_max(MeanLnP_K, n=1)
@@ -248,19 +248,59 @@ str_out %>% filter(K == maxK) %>% slice_max(MeanLnP_K, n=1) #selecting which rep
 #convert the output final from structure to readable here using text2csv.sh
 
 #read in from bash
-clust <- read.delim(paste0(PATH, "/structure_results/r2015/inferred_ancestry.csv"), header = F, sep = ",")
-clust <- set_cluster_df(clust, '2014')
-write.csv(clust, file=paste0(PATH, "/structure_results/r2014_dK2_clusterassignments.csv"), row.names = F)
+clust <- read.delim(paste0(PATH, "/structure_results/r2015/r134/inferred_ancestry.csv"), header = F, sep = ",")
+clust <- set_cluster_df(clust, '2014_134')
+write.csv(clust, file=paste0(PATH, "/structure_results/r2014_134_dK2_clusterassignments.csv"), row.names = F)
 
-# clust <- read.delim(paste0(PATH, "/structure_results/r2015/inferred_ancestry_K3.csv"), header = F, sep = ",")
-# clust <- set_cluster_df(clust, '2014')
+# clust <- read.delim(paste0(PATH, "/structure_results/r2015/r134/inferred_ancestry_K3.csv"), header = F, sep = ",")
+# clust <- set_cluster_df(clust, '2014_134')
 # write.csv(clust, file=paste0(PATH, "/structure_results/r2014_dK3_clusterassignments.csv"), row.names = F)
 
-##+ make ggplot ----
-group.colors <- c("#12263A", "#F4D1AE")
-structure_plot_it(clust, group.colors, "2014")
-ggsave(paste0(PATH, "/structure_results/figures/strct_2014_K2.png"), plot = last_plot(), width = 10, height = 6)
+##//+ make ggplot ----
+clust <- read.csv(paste0(PATH, "/structure_results/r2014_134_dK2_clusterassignments.csv"))
+group.colors <- c("#2B847C", "#DF9F1F")
+structure_plot_it(clust, group.colors, "2014, Pops 1, 3, & 4")
+ggsave(paste0(PATH, "/structure_results/figures/strct_2014_134_K2.png"), plot = last_plot(), width = 10, height = 6)
 
+# clust <- read.csv(paste0(PATH, "/structure_results/r2014_134_dK3_clusterassignments.csv"))
+# group.colors <- c("#2B847C", "#DF9F1F", "#B2C4DF")
+# structure_plot_it(clust, group.colors, "2014, Pops 1, 3, & 4")
+# ggsave(paste0(PATH, "/structure_results/figures/strct_2014_134_K3.png"), plot = last_plot(), width = 10, height = 6)
+
+#//pops 6, 7, 8, 9, 10 ----
+##//+ delta K calc----
+str_out <- read.delim(paste0(PATH, "/structure_results/r2015/r678910/iter_structure_results.csv"), header = T, sep = "\t")
+K_out <- delta_K(str_out)
+write.csv(K_out, paste0(PATH, "/results_tables/structure_deltaK2015_pop678910.csv"), row.names = F)
+
+##//+ read STRUCTURE output ----
+#based on highest delta K
+K_out <- read.csv(paste0(PATH, "/results_tables/structure_deltaK2015_pop678910.csv"))
+maxK <- K_out %>% slice_max(deltaK) %>% pull(K)
+str_out %>% filter(K == maxK) %>% slice_max(MeanLnP_K, n=1) #selecting which rep to visualize
+# str_out %>% filter(K == 2) %>% slice_max(MeanLnP_K, n=1)
+
+#convert the output final from structure to readable here using text2csv.sh
+
+#read in from bash
+clust <- read.delim(paste0(PATH, "/structure_results/r2015/r678910/inferred_ancestry.csv"), header = F, sep = ",")
+clust <- set_cluster_df(clust, '2014_678910')
+write.csv(clust, file=paste0(PATH, "/structure_results/r2014_678910_dK3_clusterassignments.csv"), row.names = F)
+
+# clust <- read.delim(paste0(PATH, "/structure_results/r2015/r678910/inferred_ancestry_K2.csv"), header = F, sep = ",")
+# clust <- set_cluster_df(clust, '2014_678910')
+# write.csv(clust, file=paste0(PATH, "/structure_results/r2014_678910_dK2_clusterassignments.csv"), row.names = F)
+
+##//+ make ggplot ----
+clust <- read.csv(paste0(PATH, "/structure_results/r2014_678910_dK3_clusterassignments.csv"))
+group.colors <- c("#2B847C", "#DF9F1F", "#B2C4DF")
+structure_plot_it(clust, group.colors, "2014, Pops 6, 7, 8, 9, & 10")
+ggsave(paste0(PATH, "/structure_results/figures/strct_2014_678910_K3.png"), plot = last_plot(), width = 10, height = 6)
+
+# clust <- read.csv(paste0(PATH, "/structure_results/r2014_678910_dK2_clusterassignments.csv"))
+# group.colors <- c("#2B847C", "#DF9F1F")
+# structure_plot_it(clust, group.colors, "2014, Pops 6, 7, 8, 9, & 10")
+# ggsave(paste0(PATH, "/structure_results/figures/strct_2014_678910_K2.png"), plot = last_plot(), width = 10, height = 6)
 
 #2019 ----
 ##+ delta K calc----
@@ -300,7 +340,30 @@ group.colors <- c("#12263A", "#F4D1AE")
 structure_plot_it(clust, group.colors, "2019", cluster.relevel = c("clust2", "clust1"))
 ggsave(paste0(PATH, "/structure_results/figures/strct_2019_K3.png"), plot = last_plot(), width = 10, height = 6)
 
+#//pops 6, 7, 8, 9 ----
+##//+ delta K calc----
+str_out <- read.delim(paste0(PATH, "/structure_results/r2019/r6789/iter_structure_results.csv"), header = T, sep = "\t")
+K_out <- delta_K(str_out)
+write.csv(K_out, paste0(PATH, "/results_tables/structure_deltaK2019_pop6789.csv"), row.names = F)
 
+##//+ read STRUCTURE output ----
+#based on highest delta K
+K_out <- read.csv(paste0(PATH, "/results_tables/structure_deltaK2019_pop6789.csv"))
+maxK <- K_out %>% slice_max(deltaK) %>% pull(K)
+str_out %>% filter(K == maxK) %>% slice_max(MeanLnP_K, n=1) #selecting which rep to visualize
+
+#convert the output final from structure to readable here using text2csv.sh
+
+#read in from bash
+clust <- read.delim(paste0(PATH, "/structure_results/r2019/r6789/inferred_ancestry.csv"), header = F, sep = ",")
+clust <- set_cluster_df(clust, '2019_6789')
+write.csv(clust, file=paste0(PATH, "/structure_results/r2019_6789_dK2_clusterassignments.csv"), row.names = F)
+
+##//+ make ggplot ----
+clust <- read.csv(paste0(PATH, "/structure_results/r2019_6789_dK2_clusterassignments.csv"))
+group.colors <- c("#2B847C", "#DF9F1F")
+structure_plot_it(clust, group.colors, "2019, Pops 6, 7, 8, & 9")
+ggsave(paste0(PATH, "/structure_results/figures/strct_2019_6789_K2.png"), plot = last_plot(), width = 10, height = 6)
 
 #2021 ----
 ##+ delta K calc----
@@ -341,3 +404,52 @@ group.colors <- c("#F4D1AE", "#12263A", "#00C6B8")
 structure_plot_it(clust, group.colors, "2021")
 ggsave(paste0(PATH, "/structure_results/figures/strct_2021_K3.png"), plot = last_plot(), width = 10, height = 6)
 
+#//pops 1, 3, 4, 10, 16 ----
+##//+ delta K calc----
+str_out <- read.delim(paste0(PATH, "/structure_results/r2021/r1341016/iter_structure_results.csv"), header = T, sep = "\t")
+K_out <- delta_K(str_out)
+write.csv(K_out, paste0(PATH, "/results_tables/structure_deltaK2021_pop1341016.csv"), row.names = F)
+
+##//+ read STRUCTURE output ----
+#based on highest delta K
+K_out <- read.csv(paste0(PATH, "/results_tables/structure_deltaK2021_pop1341016.csv"))
+maxK <- K_out %>% slice_max(deltaK) %>% pull(K)
+str_out %>% filter(K == maxK) %>% slice_max(MeanLnP_K, n=1) #selecting which rep to visualize
+
+#convert the output final from structure to readable here using text2csv.sh
+
+#read in from bash
+clust <- read.delim(paste0(PATH, "/structure_results/r2021/r1341016/inferred_ancestry.csv"), header = F, sep = ",")
+clust <- set_cluster_df(clust, '2021_1341016')
+write.csv(clust, file=paste0(PATH, "/structure_results/r2021_1341016_dK2_clusterassignments.csv"), row.names = F)
+
+##//+ make ggplot ----
+clust <- read.csv(paste0(PATH, "/structure_results/r2021_1341016_dK2_clusterassignments.csv"))
+group.colors <- c("#2B847C", "#DF9F1F")
+structure_plot_it(clust, group.colors, "2021, Pops 1, 3, 4, 10, 16")
+ggsave(paste0(PATH, "/structure_results/figures/strct_2021_1341016_K2.png"), plot = last_plot(), width = 10, height = 6)
+
+#//pops 6, 7, 8, 9 ----
+##//+ delta K calc----
+str_out <- read.delim(paste0(PATH, "/structure_results/r2021/r6789/iter_structure_results.csv"), header = T, sep = "\t")
+K_out <- delta_K(str_out)
+write.csv(K_out, paste0(PATH, "/results_tables/structure_deltaK2021_pop6789.csv"), row.names = F)
+
+##//+ read STRUCTURE output ----
+#based on highest delta K
+K_out <- read.csv(paste0(PATH, "/results_tables/structure_deltaK2021_pop1341016.csv"))
+maxK <- K_out %>% slice_max(deltaK) %>% pull(K)
+str_out %>% filter(K == maxK) %>% slice_max(MeanLnP_K, n=1) #selecting which rep to visualize
+
+#convert the output final from structure to readable here using text2csv.sh
+
+#read in from bash
+clust <- read.delim(paste0(PATH, "/structure_results/r2021/r6789/inferred_ancestry.csv"), header = F, sep = ",")
+clust <- set_cluster_df(clust, '2021_6789')
+write.csv(clust, file=paste0(PATH, "/structure_results/r2021_6789_dK2_clusterassignments.csv"), row.names = F)
+
+##//+ make ggplot ----
+clust <- read.csv(paste0(PATH, "/structure_results/r2021_6789_dK2_clusterassignments.csv"))
+group.colors <- c("#2B847C", "#DF9F1F")
+structure_plot_it(clust, group.colors, "2021, Pops 6, 7, 8, 9")
+ggsave(paste0(PATH, "/structure_results/figures/strct_2021_6789_K2.png"), plot = last_plot(), width = 10, height = 6)
