@@ -87,9 +87,9 @@ p.ar <- ggplot(data = ar.div %>% filter(!group %in% c("All_Yrs", "All_Pops")), a
   labs(x="Sample Year", y="Rarefied Allelic Richness") +
   dtheme +
   theme(title = element_blank(),
-        legend.position = "none")
-p.ar
-ggsave(filename = paste0(PATH, "/figures/delta_allelicrichness_nolegend.png"), plot = p.ar, width = 3, height = 5.45)
+        legend.position = "right")
+# p.ar
+ggsave(filename = paste0(PATH, "/figures/delta_allelicrichness_legend.png"), plot = p.ar, width = 3, height = 5.45)
 ```
 \begin{figure}[!h]
 \centering
@@ -215,7 +215,7 @@ for (i in 1:length(pop.list)) {
 ***
 # Effective population size
 
-``` {r, echo=F, message=F, fig.align="center"}
+``` {r, echo=F, message=F, fig.align="center", warning=F}
 Net <- read.csv(paste0(PATH, "/results_tables/Ne_Table_nosibs.csv"))
 Net <- Net %>% 
   mutate(year = substr(Pop, 1, 4), pond = as.integer(gsub("^[0-9]{4}.", "", Pop))) %>%
@@ -223,7 +223,8 @@ Net <- Net %>%
   mutate(year = ifelse(year == 2015, 2014, year))
 Net <- Net %>% mutate(pond = factor(pond)) %>%
   mutate(pond = fct_relevel(pond, c("1", "3", "4", "6", "7", "8", "9", "10", "16")),
-         Ne = ifelse(Ne == "Infinite", 800, Ne)) %>% #10000 was the replacement in Mims 2016
+         #Ne = ifelse(Ne == "Infinite", 800, Ne)) %>% #10000 was the replacement in Mims 2016
+         Ne = ifelse(Ne == "Infinite", NA, Ne)) %>% #removing infinite vals b/c means low sample size?
   mutate(across(starts_with("Ne"), as.numeric))
 
 dNet <- Net %>% 
@@ -235,23 +236,27 @@ dNet <- dNet %>%
          d19_21 = ((n2021 - n2019)/n2019)*100, 
          d14_21 = ((n2021 - n2014)/n2014)*100)
 
-kable(Net %>% select(year, pond, Ne, Ne.Low, Ne.High), caption = "Effective population size of all ponds and years as calculated using the LD method in NeEstimator v2")
+kable(Net %>% select(year, pond, Ne, Ne.Low, Ne.High), caption = "Effective population size of all ponds and years as calculated using the LD method in NeEstimator v2, NA represents INF value estimates.")
 
 ggplot(data = Net, aes(x=year, y=Ne, group=pond)) +
-  geom_line(aes(color=pond)) +
-  geom_point(aes(color=pond)) +
+  geom_line(aes(color=pond), size=2, lineend="round", linejoin="round") +
+  geom_point(data=Net %>% filter(pond == "16"), aes(color=pond), size=2, show.legend = F) +
+  geom_point(data = Net %>% filter(is.na(Ne)), aes(x=year, y=as.numeric(pond)*40, color=pond), shape=8, size=3, stroke=2, inherit.aes = F, show.legend = F) +
   scale_color_manual(values = aztf.pal, aesthetics = "color") +
   labs(x="Sample Year", y="Effective Population Size (Ne)", title = "Ne change over time") +
   coord_cartesian(ylim = c(0,400)) +
   theme_minimal() +
-  scale_x_discrete(expand = c(0.01,0.01))
+  theme(panel.grid.major.x = element_line(color = "#555555", linetype = "dashed")) +
+  scale_x_discrete(expand = c(0.04,0.04))
+ggsave(filename = paste0(PATH, "/figures/delta_Ne_legend.png"), plot = last_plot(), width = 4, height = 5)
 ```
 
-``` {r, echo=F, message=F, fig.align="center", eval=F}
+``` {r, echo=F, message=F, fig.align="center", eval=T}
 library(sf); library(ggmap); library(cowplot); library(RColorBrewer)
 sp.ne <- coord %>%
   left_join(Net, by=c("year_pop" = "Pop")) %>%
-  filter(!is.na(Ne)) %>%
+  # filter(!is.na(Ne)) %>%
+  filter(!pop %in% c(2, 5, 11:15)) %>%
   st_as_sf(coords=c("lon", "lat"), crs=st_crs(32612)) %>%
   mutate(Ne = ifelse(Ne == "Inf", NA, Ne))#WGS 84 / UTM zone 12N
 sp.ne <- sp.ne %>% left_join(dNet %>% select(pond, d14_19, d19_21, d14_21), by = "pond")
@@ -262,22 +267,20 @@ e[,c(3:4)] <- e[,c(3:4)] + 0.02
 
 az.base <- get_map(location = c(left = e$xmin, bottom = e$ymin, right = e$xmax, top = e$ymax),
                    maptype = "terrain")
-
-sp.ne.noinf <- sp.ne %>% filter(Ne < 350)
-sp.ne.inf <- sp.ne %>% filter(Ne > 350) %>% mutate(Ne = Inf)
 sp.dne <- sp.ne %>% select(pond, d14_19, d19_21, d14_21) %>% distinct()
 
+# c("#F4D1AE", "#12263A", "#00C6B8") 3 color palette
 ggaztf_theme <- list(
   coord_sf(datum = sf::st_crs(sp.ne)),
   # scale_fill_viridis_c(option="magma", guide = "legend", 
   #                      limits=c(min(sp.ne$Ne, na.rm = T), max(sp.ne$Ne, na.rm = T)),
   #                      breaks = c(10, 60, 110, 160, 210, 260, 310, 540)),
-  scale_fill_gradient(low = "#CC4E00", high = "#FFF2EB",  guide = "legend",
-                      limits=c(min(sp.ne.noinf$Ne, na.rm = T), max(sp.ne.noinf$Ne, na.rm = T)),
+  scale_fill_gradient(low = "#FFFFFF", high = "#12181E",  guide = "legend",
+                      limits=c(min(sp.ne$Ne, na.rm = T), max(sp.ne$Ne, na.rm = T)),
                       # breaks = round(seq(range(sp.ne.noinf$Ne)[1], range(sp.ne.noinf$Ne)[2], length.out = 5), 0)),
                       breaks = c(10, 50, 100, 200, 300)),
   scale_size_continuous(range = c(4, 14), guide = "legend",
-                        limits=c(min(sp.ne.noinf$Ne, na.rm = T), max(sp.ne.noinf$Ne, na.rm = T)),
+                        limits=c(min(sp.ne$Ne, na.rm = T), max(sp.ne$Ne, na.rm = T)),
                         # breaks = round(seq(range(sp.ne.noinf$Ne)[1], range(sp.ne.noinf$Ne)[2], length.out = 5), 0)),
                       breaks = c(10, 50, 100, 200, 300)),
   labs(x = "Longitude", y = "Latitude"),
@@ -292,65 +295,56 @@ ggaztf_theme <- list(
         axis.text = element_text(size=13))
   )
 
-p14 <- ggmap(az.base) +
-  geom_sf(data = sp.ne %>% 
-            group_by(pond) %>%
-            filter(!any(year == '2014')) %>%
-            select(geometry) %>% 
-            unique(),
-          shape=13, size=6, color="black", inherit.aes = F) +
-  geom_sf(data = sp.ne.noinf %>% filter(year == '2014'), aes(size = Ne, fill = Ne), shape=21, inherit.aes = F) +
-  geom_sf(data = sp.ne.inf %>% mutate(Ne = "Inf"), aes(color=Ne), shape=16, size=12, alpha=0, inherit.aes = F) +
-  geom_sf(data = sp.ne.inf %>% mutate(Ne = "Inf"), shape=21, color = "black", fill="transparent", size=12, alpha=0, inherit.aes = F) +
-  scale_color_manual(values=c("white")) +
-  ggtitle("2014 Effective Population Size") +
-  ggaztf_theme +
-  theme(legend.position = "bottom") +
-  guides(color = guide_legend(title = NULL, order = 2, override.aes = list(shape=21, size=16, fill="white", color="black", alpha=1), label.position = "bottom"), 
-         size = guide_legend(order=1, label.position = "bottom"), 
-         fill=guide_legend(order=1, label.position = "bottom"))
+plot_ne <- function(ne.table, set.yr, plot_inf = FALSE, add_legend = TRUE) {
+  sp.ne.noinf <- sp.ne %>% filter(Ne < 350) %>% filter(year == set.yr)
+  sp.ne.inf <- sp.ne %>% filter(is.na(Ne)) %>% mutate(Ne = "Inf") %>% filter(year == set.yr)
+  
+  #set basic plot
+  p.ne <- ggmap(az.base) +
+    geom_sf(data = sp.ne %>% 
+              group_by(pond) %>%
+              filter(!any(year == set.yr)) %>%
+              select(geometry) %>% 
+              unique(),
+            shape=13, size=6, color="black", inherit.aes = F) +
+    geom_sf(data = sp.ne.noinf, aes(size = Ne, fill = Ne), shape=21, inherit.aes = F)
+  
+  #add infinite ponds
+  if (plot_inf == FALSE) { #place holder
+    p.ne <- p.ne +
+      geom_sf(data = sp.ne.inf, aes(shape=Ne), size=5, stroke=2, color="black", inherit.aes = F) +
+      scale_shape_manual(values = c(8))
+  }
+  if (plot_inf == TRUE) { #large point
+    p.ne <- p.ne +
+      geom_sf(data = sp.ne.inf, aes(color=Ne), shape=16, size=16, alpha=1, inherit.aes = F) +
+      geom_sf(data = sp.ne.inf, shape=21, color = "black", fill=NA, size=16, alpha=1, inherit.aes = F) +
+      scale_color_manual(values=c("white"))
+  }
 
-p19 <- ggmap(az.base) +
-  geom_sf(data = sp.ne %>% 
-            group_by(pond) %>%
-            filter(!any(year == '2019')) %>%
-            select(geometry) %>% 
-            unique(),
-          shape=13, size=6, color="black", inherit.aes = F) +
-  geom_sf(data = sp.ne.noinf %>% filter(year == '2019'), aes(size = Ne, fill = Ne), shape=21, inherit.aes = F) +
-  geom_sf(data = sp.ne.inf %>% mutate(Ne = "Inf"), aes(color=Ne), shape=16, size=12, alpha=0, inherit.aes = F) +
-  geom_sf(data = sp.ne.inf %>% mutate(Ne = "Inf"), shape=21, color = "black", fill="transparent", size=12, alpha=0, inherit.aes = F) +
-  scale_color_manual(values=c("white")) +
-  ggtitle("2019 Effective Population Size") +
-  ggaztf_theme +
-  theme(axis.title = element_blank(), axis.text.y = element_blank(),
-        legend.position = "bottom") +
-  guides(color = guide_legend(title = NULL, order = 2, override.aes = list(shape=21, size=16, fill="white", color="black", alpha=1), label.position = "bottom"), 
-         size = guide_legend(order=1, label.position = "bottom"), 
-         fill=guide_legend(order=1, label.position = "bottom"))
+  #add aesthetics and titles
+  p.ne <- p.ne +
+    ggtitle(paste0(set.yr, " Effective Population Size")) +
+    ggaztf_theme +
+    theme(legend.position = "bottom") +
+    guides(color = guide_legend(title = NULL, order = 2, override.aes = list(shape=21, size=16, fill="white", color="black", alpha=1), label.position = "bottom"), 
+           size = guide_legend(order=1, label.position = "bottom"), 
+           fill = guide_legend(order=1, label.position = "bottom"),
+           shape = guide_legend(title = NULL, order = 2, label.position = "bottom"))
+  if (add_legend == FALSE) {
+    p.ne <- p.ne +
+      theme(legend.position = "none")
+  }
+  return(p.ne)
+}
 
-p21 <- ggmap(az.base) +
-  geom_sf(data = sp.ne %>% 
-            group_by(pond) %>%
-            filter(!any(year == '2021')) %>%
-            select(geometry) %>% 
-            unique(),
-          shape=13, size=6, color="black", inherit.aes = F) +
-  geom_sf(data = sp.ne.noinf %>% filter(year == '2021'), aes(size = Ne, fill = Ne), shape=21, inherit.aes = F) +
-  geom_sf(data = sp.ne.inf %>% mutate(Ne = "Inf"), aes(color=Ne), shape=16, size=16, alpha=1, inherit.aes = F) +
-  geom_sf(data = sp.ne.inf %>% mutate(Ne = "Inf"), shape=21, color = "black", fill=NA, size=16, alpha=1, inherit.aes = F) +
-  scale_color_manual(values=c("white")) +
-  ggtitle("2021 Effective Population Size") +
-  ggaztf_theme +
-  theme(axis.title = element_blank(), axis.text.y = element_blank(),
-        legend.position = "bottom") +
-  guides(color = guide_legend(title = NULL, order = 2, override.aes = list(shape=21, size=16, fill="white", color="black", alpha=1), label.position = "bottom"), 
-         size = guide_legend(order=1, label.position = "bottom"), 
-         fill=guide_legend(order=1, label.position = "bottom"))
+p14 <- plot_ne(sp.ne, "2014", add_legend = F)
+p19 <- plot_ne(sp.ne, "2019", add_legend = F)
+p21 <- plot_ne(sp.ne, "2021", add_legend = T)
 
-p14
-p19
-p21
+# p14
+# p19
+# p21
 
 ggsave(filename = paste0(PATH, "/figures/Ne_map_2014.png"), plot = p14, width = 6.8, height = 6.7)
 ggsave(filename = paste0(PATH, "/figures/Ne_map_2019.png"), plot = p19, width = 6.3, height = 6.5)
@@ -392,6 +386,26 @@ ggdne_theme <- list(
          size = "none")
   )
 
+ne_change_plot <- function(ne_dat, d_years, plot_inf = FALSE) {
+  if (!d_years %in% c("14_19", "19_21", "14_21")) {
+    stop("Incorrect year input. Must be 'd14_19', 'd19_21', or 'd14_21'")
+  }
+  
+  d.var <- paste0("d", d_years)
+  d.var <- enquo(d.var)
+  s.var <- enquo(paste0("sy", d_years))
+  
+  p.dne <- ggmap(az.base) +
+    geom_sf(data = sp.dne %>% filter(is.na(!!rlang::sym(d.var))), shape=13, size=5, color="black", inherit.aes = F) +
+    # geom_sf(data = sp.dne %>% filter(get({{s.var}}) == 'pos'), aes_string(size = d.var, fill = d.var), shape=21, color="transparent", inherit.aes = F) +
+    # geom_sf(data = sp.dne %>% filter(get({{s.var}}) == 'neg'), aes(size = d14_19, color = d14_19), shape=16, inherit.aes = F) +
+    # geom_sf(data = sp.dne %>% filter(!is.na(get({{d.var}}))), aes(size = d14_19), shape=21, fill=NA, inherit.aes = F) +
+    # geom_sf(data = sp.ne.inf %>% mutate(Ne = "Inf"), aes(color=Ne), shape=16, size=12, alpha=1, inherit.aes = F) +
+    ggtitle("2014 to 2019 Ne Change") +
+    ggdne_theme
+  
+  return(p.dne)
+}
 p14_19 <- ggmap(az.base) +
   geom_sf(data = sp.dne %>% filter(is.na(d14_19)), shape=13, size=5, color="black", inherit.aes = F) +
   geom_sf(data = sp.dne %>% filter(sy14_19 == 'pos'), aes(size = d14_19, fill = d14_19), shape=21, color="transparent", inherit.aes = F) +
@@ -400,7 +414,7 @@ p14_19 <- ggmap(az.base) +
   # geom_sf(data = sp.ne.inf %>% mutate(Ne = "Inf"), aes(color=Ne), shape=16, size=12, alpha=1, inherit.aes = F) +
   ggtitle("2014 to 2019 Ne Change") +
   ggdne_theme
-p14_19
+# p14_19
 
 p19_21 <- ggmap(az.base) +
   geom_sf(data = sp.dne %>% filter(is.na(d19_21)), shape=13, size=5, color="black", inherit.aes = F) +
@@ -410,7 +424,7 @@ p19_21 <- ggmap(az.base) +
   # geom_sf(data = sp.ne.inf %>% mutate(Ne = "Inf"), aes(color=Ne), shape=16, size=12, alpha=1, inherit.aes = F) +
   ggtitle("2019 to 2021 Ne Change") +
   ggdne_theme
-p19_21
+# p19_21
 
 p14_21 <- ggmap(az.base) +
   geom_sf(data = sp.dne %>% filter(is.na(d14_21)), shape=13, size=5, color="black", inherit.aes = F) +
@@ -420,7 +434,7 @@ p14_21 <- ggmap(az.base) +
   # geom_sf(data = sp.ne.inf %>% mutate(Ne = "Inf"), aes(color=Ne), shape=16, size=12, alpha=1, inherit.aes = F) +
   ggtitle("2014 to 2021 Ne Change") +
   ggdne_theme
-p14_21
+# p14_21
 # 
 # ggsave(filename = paste0(PATH, "/figures/Ne_change_map_14-19.png"), plot = p14_19)
 # ggsave(filename = paste0(PATH, "/figures/Ne_change_map_19-21.png"), plot = p19_21)
@@ -584,3 +598,20 @@ table((Fbar.t %>% filter(Fbar > 0.4, !grepl("All Yrs", group)) %>% left_join(azt
   \includegraphics[width=0.6\textwidth]{"/home/chloe9mo/Documents/Projects/temporal_aztreefrog/figures/IndYear_InbreedingHist.png"}
   \caption{Estimate of individuals with high likelihood of inbreeding. Fbar > 0.4 indicates likely inbred. Population 8 most consistently has degree of inbreeding.}
 \end{figure}
+
+\bigbreak
+# AMOVA
+```{r AMOVA, echo=F, message=F, eval=FALSE}
+ind.list[[1]]@other$year <- aztf$year 
+ind.list[[1]]@other$pop <- aztf$pop
+strata(ind.list[[1]]) <- data.frame(other(ind.list[[1]])$year, other(ind.list[[1]])$pop) #year will be first group, pop is sub group
+nameStrata(ind.list[[1]]) <- ~year/pop #rename
+
+#amova
+amova <- poppr::poppr.amova(ind.list[[1]], hier = ~year/pop, method = "ade4")
+
+#test for significance
+system.time(
+amova.test <- ade4::randtest(amova, nrepet = 10)
+)
+```

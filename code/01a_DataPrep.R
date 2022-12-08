@@ -136,8 +136,8 @@ indiv <- mims.2[,1]
 mims.2 <- mims.2[,-1]
 aztf2015 <- aztf2015[,-1]
 
-cols <- sort(intersect(names(aztf2015), names(mims.2)))
-call.diff.2 <- aztf2015[cols] - mims.2[cols]
+cols <- sort(intersect(names(aztf2015), names(mims.2))) #get column names and match order
+call.diff.2 <- aztf2015[cols] - mims.2[cols] #subtract columns from each other in the same order
 call.diff.2$indiv <- indiv
 call.diff.2 <- call.diff.2[,c(35, 1:34)]
 mims.2$indiv <- indiv
@@ -169,6 +169,7 @@ sum.diff <- call.diff.2 %>% replace(is.na(.), 0) %>%
             hwri4093 = hwri4093_1+hwri4093_2,
             hwri4269 = hwri4269_1+hwri4269_2,
             hwri4370 = hwri4370_1+hwri4370_2)
+sum.diff$indiv <- as.data.frame(sum.diff$indiv)$indiv
 write.csv(sum.diff, file = paste0(PATH, "/sum_diff_2015_updated.csv"), row.names = FALSE)
 
 summary <- sum.diff %>% mutate_if(is.numeric, ~1 * (. != 0))

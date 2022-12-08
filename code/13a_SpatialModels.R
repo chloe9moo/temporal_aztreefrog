@@ -90,7 +90,7 @@ dist_plot_gst <- function(genind.obj, title, gen.transform = T, geo.tranform = F
   
   if (gen.transform == T) {
     az.pw_G <- pairwise_Gst_Hedrick(genind.obj, linearized = TRUE)
-    y_title <- "1 / (1 - Gst)"
+    y_title <- "Gst / (1 - Gst)"
   } else {
     az.pw_G <- pairwise_Gst_Hedrick(genind.obj, linearized = FALSE)
     y_title <- "Genetic Distance"
@@ -234,7 +234,7 @@ dist_plot <- function(genind.obj, obj.name, gen.measure, gen.transform = F, geo.
 
   if (gen.transform == T) {
     az.pw_G <- az.pw_G / (1 - az.pw_G)
-    y_title <- paste0("1 / (1 - ", gen.measure, ")")
+    y_title <- paste0(gen.measure, " / (1 - ", gen.measure, ")")
     all.title <- paste0(gsub(".*?([0-9]+).*", "\\1", obj.name), " linearized ", gen.measure)
   } else {
     y_title <- gen.measure

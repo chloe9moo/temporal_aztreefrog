@@ -13,7 +13,8 @@ dat <- read.csv(paste0(PATH, "/multiyear_hywr_tracking.csv")) %>%
   filter(Individual.ID != "19-015")
 
 dat.sf <- st_as_sf(dat, coords = c("UTME","UTMN"), crs=32612)
-pop.dat <- dat.sf %>% select("Year.Sampled","Pond.Number") %>% unique()
+pop.dat <- dat.sf %>% select("Year.Sampled","Pond.Number") %>% unique() %>% 
+  mutate(Year.Sampled = fct_relevel(as.factor(Year.Sampled), "2014", "2018", "2019", "2021"))
 
 # pal <-  mapviewPalette("mapviewSpectralColors")
 
@@ -34,12 +35,24 @@ mapview(pop.dat, zcol="Year.Sampled", legend=T)
 
 
 #summarizing ----
-sumdat <- aztf %>% select(year, pop) %>%
-  count(year, pop) %>%
-  pivot_wider(id_cols=pop, names_from = year, values_from=n) %>%
-  replace(is.na(.), 0) %>%
-  mutate(TotSamp = rowSums(across(.cols = c('2014','2019','2021'))))
-write.csv(sumdat, file = paste0(PATH,"/HYWR_multiyear_popsumm.csv"), row.names = F)
+# sumdat <- read.csv(paste0(PATH, "/microsat_data/final_aztf_loci_sibs.csv")) %>% select(year, pop) %>%
+#   mutate(year = case_when(year == 2018 ~ 2019,
+#                           year == 2015 ~ 2014,
+#                           T ~ as.numeric(year)), 
+#          pop = case_when(pop == "1" ~ 1,
+#                          pop == "4" ~ 2,
+#                          pop == "3" ~ 3,
+#                          pop == "6" ~ 4, 
+#                          pop == "7" ~ 5, 
+#                          pop == "8" ~ 6, 
+#                          pop == "9" ~ 7, 
+#                          pop == "10" ~ 8, 
+#                          pop == "16" ~ 9)) %>%
+#   count(year, pop) %>%
+#   pivot_wider(id_cols=pop, names_from = year, values_from=n) %>%
+#   replace(is.na(.), 0) %>%
+#   mutate(TotSamp = rowSums(across(.cols = c('2014','2019','2021'))))
+# write.csv(sumdat, file = paste0(PATH,"/HYWR_multiyear_popsumm.csv"), row.names = F)
 
 # dat <- dat %>% mutate(UTME = round(as.numeric(UTME), 0), UTMN = round(as.numeric(UTMN), 0)) %>%
 #   arrange()
@@ -59,55 +72,158 @@ write.csv(sumdat, file = paste0(PATH,"/HYWR_multiyear_popsumm.csv"), row.names =
 # dat.fix.sf %>% select(Pond.Number) %>% unique() %>% mapview(., legend=F)
 
 #pond coords ----
-xy <- dat %>% dplyr::select(Pond.Number, UTME, UTMN) %>% unique()
-xy <- st_as_sf(xy, coords = c("UTME", "UTMN"), crs = 32612) #crs is WGS 84, UTM zone 12N
-#checking it worked
-# mapview(xy)
-#convert to lat long
-xy.ll <- st_transform(xy, crs = "+proj=longlat +datum=WGS84")
-#checking it worked
-# mapview(list(xy, xy.ll), col.regions=list("red", "blue"))
-#save as dataframe
-xy.ll <- xy.ll %>% 
-  mutate(lon = sf::st_coordinates(.)[,1],
-         lat = sf::st_coordinates(.)[,2]) %>% 
-  st_drop_geometry()
-loci <- read.csv(paste0(PATH, "/microsat_data/combined_aztf_loci.csv"))
-loci <- loci %>% mutate(pop = as.character(pop))
-
-xy.ll <- loci %>% select(pop, year_pop) %>% left_join(., xy.ll, by = c("pop" = "Pond.Number")) %>% unique()
-write.csv(xy.ll, file=paste0(PATH, "/pond_coordinates.csv"), row.names = F)
-
-# clip elevation layer for background plots
-# library(terra)
-# coord <- read.csv(paste0(PATH, "/pond_coordinates.csv")) %>% st_as_sf(coords=c("lon", "lat"), crs=st_crs(32612))
-# elev <- rast("~/Documents/Projects/anuran_biodiversity/EnvironmentalData/na_elevation_reproj.tif")
+# xy <- dat %>% dplyr::select(Pond.Number, UTME, UTMN) %>% unique()
+# xy <- st_as_sf(xy, coords = c("UTME", "UTMN"), crs = 32612) #crs is WGS 84, UTM zone 12N
+# #checking it worked
+# # mapview(xy)
+# #convert to lat long
+# xy.ll <- st_transform(xy, crs = "+proj=longlat +datum=WGS84")
+# #checking it worked
+# # mapview(list(xy, xy.ll), col.regions=list("red", "blue"))
+# #save as dataframe
+# xy.ll <- xy.ll %>% 
+#   mutate(lon = sf::st_coordinates(.)[,1],
+#          lat = sf::st_coordinates(.)[,2]) %>% 
+#   st_drop_geometry()
+# loci <- read.csv(paste0(PATH, "/microsat_data/combined_aztf_loci.csv"))
+# loci <- loci %>% mutate(pop = as.character(pop))
 # 
-# e <- as.data.frame(as.matrix(st_bbox(coord))) %>% rownames_to_column(var = "name") %>% pivot_wider(names_from = name, values_from = V1)
-# e[,c(1:2)] <- e[,c(1:2)] - 0.1 #1 degrees diff = ~100 km
-# e[,c(3:4)] <- e[,c(3:4)] + 0.1 
-# e <- ext(c(xmin=e$xmin, xmax=e$xmax, ymin=e$ymin, ymax=e$ymax))
-# 
-# elev <- crop(elev, e)
+# xy.ll <- loci %>% select(pop, year_pop) %>% left_join(., xy.ll, by = c("pop" = "Pond.Number")) %>% unique()
+# write.csv(xy.ll, file=paste0(PATH, "/pond_coordinates.csv"), row.names = F)
 
 #sample extent maps ----
-library(sf); library(ggmap); library(cowplot)
-coord <- read.csv(paste0(PATH, "/pond_coordinates.csv")) %>% st_as_sf(coords=c("lon", "lat"), crs=st_crs(32612))
+# library(ggmap); library(cowplot)
+
+sumdat <- read.csv(paste0(PATH,"/HYWR_multiyear_popsumm.csv")) %>% rename_with(.cols = everything(), ~ gsub("X", "", .x))
+
 coord <- coord %>%
-  filter(pop %in% c("1", "3", "4", "6", "7", "8", "9", "10", "16")) %>%
+  filter(pop %in% c("1", "2", "3", "4", "5", "6", "7", "8", "9")) %>%
   left_join(sumdat, by="pop") %>%
-  mutate(pop = fct_relevel(factor(pop), c("1", "3", "4", "6", "7", "8", "9", "10", "16"))) %>%
+  mutate(pop = fct_relevel(as.factor(pop), c("1", "2", "3", "4", "5", "6", "7", "8", "9"))) %>%
   rename(y2014 = '2014',
          y2019 = '2019',
-         y2021 = '2021')
+         y2021 = '2021') %>%
+  st_as_sf(., coords=c("lon", "lat"), crs=st_crs(4269), remove=F)
 
-e <- as.data.frame(as.matrix(st_bbox(coord))) %>% rownames_to_column(var = "name") %>% pivot_wider(names_from = name, values_from = V1)
-e[,c(1:2)] <- e[,c(1:2)] - 0.02 #1 degrees diff = ~100 km
-e[,c(3:4)] <- e[,c(3:4)] + 0.02
+e <- as.data.frame(as.matrix(st_bbox(coord %>% st_transform(26912)))) %>% rownames_to_column(var = "name") %>% pivot_wider(names_from = name, values_from = V1)
+e[,1] <- e[,1] - 2000 #honestly not sure what the units are
+e[,2] <- e[,2] - 10000 
+e[,3] <- e[,3] + 2000 
+e[,4] <- e[,4] + 2000 
 
-az.base <- get_map(location = c(left = e$xmin, bottom = e$ymin, right = e$xmax, top = e$ymax),
-                   maptype = "terrain")
+#+ clip background layers ----
+library(terra); library(tidyterra); library(ggnewscale)
 
+#get hillshade
+elev <- rast(paste0(PATH, "/ElevationData/Combined_ElevationRast.tif"))
+slope <- terrain(elev, "slope", unit = "radians")
+aspect <- terrain(elev, "aspect", unit = "radians")
+hill <- shade(slope, aspect, 25, 270)
+#get extent and crop
+e.r <- ext(c(xmin=e$xmin, xmax=e$xmax, ymin=e$ymin, ymax=e$ymax))
+hill.c <- crop(hill, e.r)
+
+pal_greys <- hcl.colors(1500, "BrwnYl", rev = T)
+pal_greys <- pal_greys[c(1:1000)]
+# pal_greys <- pal_greys[c(100:600,900:1400)]
+
+#test background
+ggplot() +
+  geom_spatraster(data=hill.c, show.legend = T) +
+  geom_sf(data = coord) +
+  scale_fill_gradientn(colors = pal_greys, na.value = NA)
+
+#+ sample extent map for manuscript ----
+library(maps); library(scatterpie); library(ggrepel); library(ggspatial)
+
+#full N. America inset
+na <- st_as_sf(map("world", regions = c("usa(?!:Hawaii)(?!:Alaska)", "mexico"), plot = FALSE, fill = TRUE)) %>%
+  st_transform(st_crs("+proj=lcc +lat_0=40 +lon_0=-96 +lat_1=20 +lat_2=60 +x_0=0 +y_0=0 +datum=NAD83 +units=m +no_defs +type=crs"))
+#az shape
+az <- st_as_sf(map("state", "arizona", plot = FALSE, fill = TRUE)) %>% st_transform(st_crs("+proj=lcc +lat_0=40 +lon_0=-96 +lat_1=20 +lat_2=60 +x_0=0 +y_0=0 +datum=NAD83 +units=m +no_defs +type=crs"))
+#aztf range polygon
+range <- read_sf(paste0(PATH, "/spatial_data/range_map/data_0.shp")) %>% st_transform(st_crs("+proj=lcc +lat_0=40 +lon_0=-96 +lat_1=20 +lat_2=60 +x_0=0 +y_0=0 +datum=NAD83 +units=m +no_defs +type=crs"))
+#usa + mex inset map
+p.full <- ggplot() +
+  geom_sf(data = na, fill="grey", color="black", size=0.3) +
+  geom_sf(data = az, fill="#444444", color="black") +
+  geom_sf(data = range, fill="red", color="red", alpha = 0.5, size=0.2) +
+  #geom_sf(data = st_as_sfc(st_bbox(pnw)), fill = "red", color="red", size=2, alpha=0.5) +
+  labs(x="Longitude", y="Latitude") +
+  #coord_sf(xlim=c(-180,-40), ylim = c(15, 85)) +
+  theme(rect = element_rect(fill="transparent"),
+        panel.grid = element_blank(),
+        panel.background = element_rect(fill="transparent"),
+        axis.text = element_blank(),
+        axis.title = element_blank(),
+        axis.ticks = element_blank())
+p.full
+ggsave(filename=paste0(PATH, "/figures/Full_StudyExtent_Map.png"), plot=p.full, width = 4, height = 6, bg="transparent")
+
+#reformat data for plotting
+coord.base <- coord %>% select(-year, -year_pop) %>% distinct(.) %>%
+  mutate(radius = TotSamp/7000, 
+         across(.cols = starts_with("l"), ~as.numeric(.x)),
+         across(.cols = starts_with("y20"), ~as.numeric(.x)))
+pie.coord <- coord.base %>% st_drop_geometry()
+
+#match projection
+hill.c <- project(hill.c, crs(coord.base))
+
+#set colors
+az.colors <- c("#F4D1AE", "#12263A", "#00C6B8")
+
+#plot
+p.zoom <- ggplot() +
+  geom_spatraster(data=hill.c, show.legend = F) +
+  scale_fill_gradientn(colors = pal_greys, na.value = NA) +
+  new_scale_fill() +
+  geom_text_repel(data = coord.base %>% filter(TotSamp < 37), aes(x=lon, y=lat, label=pop), nudge_y = 0.009, nudge_x = 0.009, size=7, fontface="bold") +
+  geom_text_repel(data = coord.base %>% filter(TotSamp < 80 & TotSamp > 50), aes(x=lon, y=lat, label=pop), nudge_y = 0.013, nudge_x = 0.013, size=7, fontface="bold") +
+  geom_text_repel(data = coord.base %>% filter(TotSamp > 80), aes(x=lon, y=lat, label=pop), nudge_y = 0.015, nudge_x = 0.014, size=7, fontface="bold") +
+  geom_scatterpie(data = pie.coord, aes(x=lon, y=lat, r=radius, fill=type), cols = c("y2014", "y2019", "y2021"), size = 0.2) +
+  # coord_equal() +
+  # geom_scatterpie_legend(coord.base$radius, x=-110.508, y=31.382, labeller = function(x) x*7000, n=3) +
+  # geom_text(x=-110.51, y=31.405, label="Arizona treefrog \nindividuals collected", size=5, hjust = 0.5) +
+  scale_fill_manual(values = az.colors, aesthetics = "fill",
+                    guide = guide_legend(title = "", title.position = "top", direction = "vertical"),
+                    labels = c('2014', '2019', '2021')) +
+  labs(x="Longitude", y="Latitude") +
+  annotation_scale(location = "bl", width_hint = 0.3, pad_y = unit(0.17, "inches"), pad_x = unit(0.2, "inches"), style = "ticks", text_cex = 1.1, text_pad = unit(0.3, "cm"), tick_height = 1, line_width = 1.5) +
+  annotation_north_arrow(location = "tr", which_north = "grid", width = unit(0.35, "inches"), height = unit(0.35, "inches")) +
+  scale_x_continuous(expand = c(-0.001,-0.001)) +
+  scale_y_continuous(expand = c(-0.001,-0.001), position = "right") +
+  theme(panel.background = element_blank(),
+        plot.background = element_blank(),
+        panel.border = element_rect(fill=NA, color = "black"),
+        legend.position = c(-0.15, 0.02),
+        # legend.position = "left",
+        legend.justification = "bottom",
+        legend.key = element_blank(),
+        legend.background = element_blank(),
+        legend.text = element_text(size=15),
+        legend.title = element_text(size = 15),
+        plot.title = element_blank(),
+        axis.text.y = element_text(angle = 90, hjust = 0.5),
+        # axis.title = element_text(size = 15),
+        # axis.title.y = element_text(hjust = 0.1),
+        axis.title = element_blank())
+p.zoom
+ggsave(filename = paste0(PATH, "/figures/Full_StudyExtent_Inset.png"), plot = p.zoom, width = 8, height = 5, bg="transparent")
+
+transp <- hcl.colors(1000, "viridis", alpha = 0)
+ggplot() + 
+  geom_spatraster(data=hill.c, show.legend = F) +
+  scale_fill_gradientn(colors = transp, na.value = NA) +
+  geom_scatterpie_legend(coord.base$radius, x=-110.4, y=31.45, labeller = function(x) x*7000, n=3) +
+  theme(panel.background = element_blank(),
+        plot.background = element_blank(), 
+        panel.grid.major = element_blank())
+  # geom_scatterpie(data = pie.coord, aes(x=lon, y=lat, r=radius, fill=type), cols = c("y2014", "y2019", "y2021"), size = 0.2)
+ggsave(paste0(PATH, "/figures/Full_StudyExtent_PieLegend.png"), plot = last_plot(), width = 8, height = 5, bg="transparent")
+
+#+ pop number map ----
+coord <- coord %>% st_as_sf(coords=c("lon", "lat"), crs=st_crs(32612))
 pm <- ggmap(az.base) +
   # geom_sf(data = coord, size=2, shape=4, inherit.aes = F) +
   # geom_sf(data = coord %>% filter(pop %in% c("1", "3", "4", "6", "7", "8", "9", "10", "16")), aes(fill=pop), color="black", shape=21, inherit.aes = F) +
@@ -128,6 +244,7 @@ pm <- ggmap(az.base) +
 pm
 ggsave(filename = paste0(PATH,"/figures/pca_aztf_samplemap.png"), plot = pm, width = 7, height = 7)
 
+#+ pop size maps ----
 nsampmap.graphics <- list(
   coord_sf(datum = sf::st_crs(coord)),
     # scale_color_manual(values = aztf.pal, aesthetics = "color"),

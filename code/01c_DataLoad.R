@@ -5,8 +5,32 @@
 #load in data
 aztf <- read.csv(paste0(PATH, "/microsat_data/final_aztf_loci_nosibs.csv"))
 aztf <- aztf %>% mutate(year = ifelse(year == 2018, 2019, year)) %>%
-  mutate(year = ifelse(year == 2015, 2014, year))
-coord <- read.csv(paste0(PATH, "/pond_coordinates.csv")) %>% arrange(pop)
+  mutate(year = ifelse(year == 2015, 2014, year), 
+         pop = case_when(pop == "1" ~ 1,
+                         pop == "4" ~ 2,
+                         pop == "3" ~ 3,
+                         pop == "6" ~ 4, 
+                         pop == "7" ~ 5, 
+                         pop == "8" ~ 6, 
+                         pop == "9" ~ 7, 
+                         pop == "10" ~ 8, 
+                         pop == "16" ~ 9),
+         year_pop = paste0(year, "_", pop))
+coord <- read.csv(paste0(PATH, "/pond_coordinates.csv")) %>% arrange(pop) %>%
+  filter(!pop %in% c(2, 5, 11, 12, 13, 14, 15)) %>%
+  mutate(pop = case_when(pop == "1" ~ 1,
+                         pop == "4" ~ 2,
+                         pop == "3" ~ 3,
+                         pop == "6" ~ 4, 
+                         pop == "7" ~ 5, 
+                         pop == "8" ~ 6, 
+                         pop == "9" ~ 7, 
+                         pop == "10" ~ 8, 
+                         pop == "16" ~ 9, 
+                         T ~ 100),
+         year = gsub("_[0-9]*$", "", year_pop),
+         year = ifelse(year == 2015, 2014, year), 
+         year_pop = paste0(year, "_", pop))
 pop.coord <- coord %>% dplyr::select(pop, lon, lat) %>% unique() %>% remove_rownames() %>% column_to_rownames("pop")
 
 ind_aztf_pop <- df2genind(aztf[,c(6:22)], sep = "/", ind.names = aztf$ID, NA.char = "-1/-1")
@@ -47,14 +71,14 @@ pop.names <- list("All Yrs - Pop x Pop", "All Yrs - Pop x Year", "Pop 2014", "Po
 
 #color palette
 aztf.pal <- c("1" = "#E9D097", 
-              "3" = "#5E2D30", 
-              "4" = "#C5A387", 
-              "6" = "#5cc589", 
-              "7" = "#67B8D6", 
-              "8" = "#1C77A3",
-              "9" = "#008E90", 
-              "10" = "#283F79", 
-              "16" = "#28231D")
+              "2" = "#5E2D30", 
+              "3" = "#C5A387", 
+              "4" = "#5cc589", 
+              "5" = "#67B8D6", 
+              "6" = "#1C77A3",
+              "7" = "#008E90", 
+              "8" = "#283F79", 
+              "9" = "#28231D")
 
 #color testing:
 # as.data.frame(aztf.pal) %>% rename(color = aztf.pal) %>% mutate(pop = row.names(.)) %>% 
