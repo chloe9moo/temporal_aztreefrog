@@ -399,6 +399,18 @@ write.csv(aztf.s, file=paste0(PATH, "/microsat_data/combined_aztf_loci_nosibs.cs
 library(adegenet)
 # aztf <- read.csv(paste0(PATH,"/microsat_data/final_aztf_loci_sibs.csv"))
 aztf <- read.csv(paste0(PATH,"/microsat_data/final_aztf_loci_nosibs.csv"))
+aztf <- aztf %>% mutate(year = ifelse(year == 2018, 2019, year)) %>%
+  mutate(year = ifelse(year == 2015, 2014, year), 
+         pop = case_when(pop == "1" ~ 1,
+                         pop == "4" ~ 2,
+                         pop == "3" ~ 3,
+                         pop == "6" ~ 4, 
+                         pop == "7" ~ 5, 
+                         pop == "8" ~ 6, 
+                         pop == "9" ~ 7, 
+                         pop == "10" ~ 8, 
+                         pop == "16" ~ 9),
+         year_pop = paste0(year, "_", pop))
 microsat <- aztf %>% select(contains("hwri"))
 # microsat <- df2genind(microsat, sep = "/", ind.names = aztf$ID, NA.char = "-1/-1")
 microsat <- microsat %>% 

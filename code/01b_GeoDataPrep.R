@@ -128,10 +128,10 @@ pal_greys <- pal_greys[c(1:1000)]
 # pal_greys <- pal_greys[c(100:600,900:1400)]
 
 #test background
-ggplot() +
-  geom_spatraster(data=hill.c, show.legend = T) +
-  geom_sf(data = coord) +
-  scale_fill_gradientn(colors = pal_greys, na.value = NA)
+# ggplot() +
+#   geom_spatraster(data=hill.c, show.legend = T) +
+#   geom_sf(data = coord) +
+#   scale_fill_gradientn(colors = pal_greys, na.value = NA)
 
 #+ sample extent map for manuscript ----
 library(maps); library(scatterpie); library(ggrepel); library(ggspatial)
@@ -142,21 +142,23 @@ na <- st_as_sf(map("world", regions = c("usa(?!:Hawaii)(?!:Alaska)", "mexico"), 
 #az shape
 az <- st_as_sf(map("state", "arizona", plot = FALSE, fill = TRUE)) %>% st_transform(st_crs("+proj=lcc +lat_0=40 +lon_0=-96 +lat_1=20 +lat_2=60 +x_0=0 +y_0=0 +datum=NAD83 +units=m +no_defs +type=crs"))
 #aztf range polygon
-range <- read_sf(paste0(PATH, "/spatial_data/range_map/data_0.shp")) %>% st_transform(st_crs("+proj=lcc +lat_0=40 +lon_0=-96 +lat_1=20 +lat_2=60 +x_0=0 +y_0=0 +datum=NAD83 +units=m +no_defs +type=crs"))
+range <- read_sf(paste0(PATH, "/spatial_data/range_map/Approx_Range_Map.shp")) %>% st_transform(st_crs("+proj=lcc +lat_0=40 +lon_0=-96 +lat_1=20 +lat_2=60 +x_0=0 +y_0=0 +datum=NAD83 +units=m +no_defs +type=crs"))
+
 #usa + mex inset map
 p.full <- ggplot() +
   geom_sf(data = na, fill="grey", color="black", size=0.3) +
   geom_sf(data = az, fill="#444444", color="black") +
   geom_sf(data = range, fill="red", color="red", alpha = 0.5, size=0.2) +
-  #geom_sf(data = st_as_sfc(st_bbox(pnw)), fill = "red", color="red", size=2, alpha=0.5) +
+  geom_sf(data = coord %>% filter(pop == 5), fill=NA, color="yellow", shape=22, size=5, alpha=0.6, stroke=1) +
   labs(x="Longitude", y="Latitude") +
-  #coord_sf(xlim=c(-180,-40), ylim = c(15, 85)) +
+  # coord_sf(xlim=c(-2500000, 0), ylim = c(-1800000, 1200000)) + #see more of the usa/mex
+  coord_sf(xlim=c(-2100000, -800000), ylim = c(-1700000, 100)) +
   theme(rect = element_rect(fill="transparent"),
-        panel.grid = element_blank(),
+        panel.grid.major = element_line(color="gray", linetype = "dashed"),
         panel.background = element_rect(fill="transparent"),
-        axis.text = element_blank(),
-        axis.title = element_blank(),
-        axis.ticks = element_blank())
+        #axis.text = element_blank(),
+        panel.border = element_rect(color = "black"),
+        axis.title = element_blank())
 p.full
 ggsave(filename=paste0(PATH, "/figures/Full_StudyExtent_Map.png"), plot=p.full, width = 4, height = 6, bg="transparent")
 
@@ -244,92 +246,92 @@ pm <- ggmap(az.base) +
 pm
 ggsave(filename = paste0(PATH,"/figures/pca_aztf_samplemap.png"), plot = pm, width = 7, height = 7)
 
-#+ pop size maps ----
-nsampmap.graphics <- list(
-  coord_sf(datum = sf::st_crs(coord)),
-    # scale_color_manual(values = aztf.pal, aesthetics = "color"),
-    scale_fill_manual(values = aztf.pal, aesthetics = "fill", guide = "none", labels = coord$pop),
-    scale_size_continuous(range = c(4, 14), guide = "legend",
-                          limits=c(0, 45),
-                          breaks = c(5, 15, 25, 35, 45)),
-    labs(x = "Longitude", y = "Latitude", size="# of \nindividuals"),
-    theme(panel.background = element_blank(),
-          panel.border = element_rect(fill=NA, color = "black"),
-          legend.key = element_blank(),
-          legend.text = element_text(size=18),
-          legend.title = element_text(size = 18),
-          plot.title = element_text(face = "bold", size = 18),
-          axis.title = element_text(size=15),
-          axis.text = element_text(size=13))
-)
-
-pm2 <- ggmap(az.base) +
-  geom_sf(data = coord %>% filter(y2014 == 0), size=7, shape=13, inherit.aes = F) +
-  geom_sf(data = coord %>% filter(y2014 > 0), aes(fill=pop, size=y2014), color="black", shape=21, inherit.aes = F) +
-  # geom_sf_text(data = coord %>% filter(pop %in% c("4", "6", "7", "8", "9", "10")), aes(label=pop), color="black", inherit.aes = F) +
-  # geom_sf_text(data = coord %>% filter(pop %in% c("1", "3")), aes(label=pop), color="white", inherit.aes = F) +
-  # geom_sf_text(data = coord %>% filter(pop %in% c("16")), aes(label=pop), color="black", nudge_y = 0.008, inherit.aes = F) +
-  ggtitle("2014 sampled populations") +
-  nsampmap.graphics +
-  theme(legend.position = "bottom",
-        legend.title.align = 1) +
-  guides(size = guide_legend(label.position = "bottom"))
-pm2
-pm3 <- ggmap(az.base) +
-  geom_sf(data = coord %>% filter(y2019 == 0), size=7, shape=13, inherit.aes = F) +
-  geom_sf(data = coord %>% filter(y2019 > 0), aes(fill=pop, size=y2019), color="black", shape=21, inherit.aes = F) +
-  # geom_sf_text(data = coord %>% filter(y2019 > 0), aes(label=pop), color="black", inherit.aes = F) +
-  # geom_sf_text(data = coord %>% filter(y2019 == 0), aes(label=pop), color="black", nudge_y = 0.008, inherit.aes = F) +
-  # geom_sf_text(data = coord %>% filter(pop %in% c("16")), aes(label=pop), color="white", inherit.aes = F) +
-  ggtitle("2019 sampled populations") +
-  nsampmap.graphics +
-  theme(legend.position = "bottom", 
-        axis.title.y = element_blank(), 
-        axis.text.y = element_blank(),
-        legend.title.align = 1) +
-  guides(size = guide_legend(label.position = "bottom"))
-pm3
-pm4 <- ggmap(az.base) +
-  geom_sf(data = coord %>% filter(y2021 == 0), size=7, shape=13, inherit.aes = F) +
-  geom_sf(data = coord %>% filter(y2021 > 0), aes(fill=pop, size=y2021), color="black", shape=21, inherit.aes = F) +
-  # geom_sf_text(data = coord %>% filter(pop %in% c("4", "6", "7", "8", "9")), aes(label=pop), color="black", inherit.aes = F) +
-  # geom_sf_text(data = coord %>% filter(pop %in% c("1", "3", "16")), aes(label=pop), color="white", inherit.aes = F) +
-  # geom_sf_text(data = coord %>% filter(pop %in% c("10")), aes(label=pop), color="black", nudge_y = 0.008, inherit.aes = F) +
-  ggtitle("2021 sampled populations") +
-  nsampmap.graphics +
-  theme(legend.position = "bottom", 
-        axis.title.y = element_blank(), 
-        axis.text.y = element_blank(),
-        legend.title.align = 1) +
-  guides(size = guide_legend(label.position = "bottom"))
-pm4
-
-pm5 <- ggmap(az.base) +
-  geom_sf(data = coord, aes(fill=pop, size=TotSamp), color="black", shape=21, inherit.aes = F) +
-  geom_sf_text(data = coord %>% filter(pop %in% c("4", "6", "7", "8", "9", "1")), aes(label=pop), color="black", inherit.aes = F) +
-  geom_sf_text(data = coord %>% filter(pop %in% c("10", "3", "16")), aes(label=pop), color="white", inherit.aes = F) +
-  ggtitle("Total Samples") +
-  scale_size_continuous(range = c(2, 12), guide = "legend",
-                        limits=c(10, 105),
-                        breaks = c(20, 40, 60, 80, 100)) +
-  coord_sf(datum = sf::st_crs(coord)) +
-  scale_fill_manual(values = aztf.pal, aesthetics = "fill", guide = "none", labels = coord$pop) +
-  labs(x = "Longitude", y = "Latitude", size="# of \nindividuals") +
-  theme(panel.background = element_blank(),
-        panel.border = element_rect(fill=NA, color = "black"),
-        legend.key = element_blank(),
-        legend.text = element_text(size=15),
-        legend.title = element_text(size = 15),
-        plot.title = element_text(face = "bold", size = 18),
-        axis.title = element_text(size=15),
-        axis.text = element_text(size=13))
-  
-pm5
-
-ggsave(filename = paste0(PATH,"/figures/aztf_samplemap_2014.png"), plot = pm2, width = 6.8, height = 6.5)
-ggsave(filename = paste0(PATH,"/figures/aztf_samplemap_2019.png"), plot = pm3, width = 6.3, height = 6.5)
-ggsave(filename = paste0(PATH,"/figures/aztf_samplemap_2021.png"), plot = pm4, width = 6.3, height = 6.5)
-ggsave(filename = paste0(PATH,"/figures/aztf_samplemap_total.png"), plot = pm5, width = 7, height = 7)
+# #+ pop size maps ----
+# nsampmap.graphics <- list(
+#   coord_sf(datum = sf::st_crs(coord)),
+#     # scale_color_manual(values = aztf.pal, aesthetics = "color"),
+#     scale_fill_manual(values = aztf.pal, aesthetics = "fill", guide = "none", labels = coord$pop),
+#     scale_size_continuous(range = c(4, 14), guide = "legend",
+#                           limits=c(0, 45),
+#                           breaks = c(5, 15, 25, 35, 45)),
+#     labs(x = "Longitude", y = "Latitude", size="# of \nindividuals"),
+#     theme(panel.background = element_blank(),
+#           panel.border = element_rect(fill=NA, color = "black"),
+#           legend.key = element_blank(),
+#           legend.text = element_text(size=18),
+#           legend.title = element_text(size = 18),
+#           plot.title = element_text(face = "bold", size = 18),
+#           axis.title = element_text(size=15),
+#           axis.text = element_text(size=13))
+# )
+# 
+# pm2 <- ggmap(az.base) +
+#   geom_sf(data = coord %>% filter(y2014 == 0), size=7, shape=13, inherit.aes = F) +
+#   geom_sf(data = coord %>% filter(y2014 > 0), aes(fill=pop, size=y2014), color="black", shape=21, inherit.aes = F) +
+#   # geom_sf_text(data = coord %>% filter(pop %in% c("4", "6", "7", "8", "9", "10")), aes(label=pop), color="black", inherit.aes = F) +
+#   # geom_sf_text(data = coord %>% filter(pop %in% c("1", "3")), aes(label=pop), color="white", inherit.aes = F) +
+#   # geom_sf_text(data = coord %>% filter(pop %in% c("16")), aes(label=pop), color="black", nudge_y = 0.008, inherit.aes = F) +
+#   ggtitle("2014 sampled populations") +
+#   nsampmap.graphics +
+#   theme(legend.position = "bottom",
+#         legend.title.align = 1) +
+#   guides(size = guide_legend(label.position = "bottom"))
+# pm2
+# pm3 <- ggmap(az.base) +
+#   geom_sf(data = coord %>% filter(y2019 == 0), size=7, shape=13, inherit.aes = F) +
+#   geom_sf(data = coord %>% filter(y2019 > 0), aes(fill=pop, size=y2019), color="black", shape=21, inherit.aes = F) +
+#   # geom_sf_text(data = coord %>% filter(y2019 > 0), aes(label=pop), color="black", inherit.aes = F) +
+#   # geom_sf_text(data = coord %>% filter(y2019 == 0), aes(label=pop), color="black", nudge_y = 0.008, inherit.aes = F) +
+#   # geom_sf_text(data = coord %>% filter(pop %in% c("16")), aes(label=pop), color="white", inherit.aes = F) +
+#   ggtitle("2019 sampled populations") +
+#   nsampmap.graphics +
+#   theme(legend.position = "bottom", 
+#         axis.title.y = element_blank(), 
+#         axis.text.y = element_blank(),
+#         legend.title.align = 1) +
+#   guides(size = guide_legend(label.position = "bottom"))
+# pm3
+# pm4 <- ggmap(az.base) +
+#   geom_sf(data = coord %>% filter(y2021 == 0), size=7, shape=13, inherit.aes = F) +
+#   geom_sf(data = coord %>% filter(y2021 > 0), aes(fill=pop, size=y2021), color="black", shape=21, inherit.aes = F) +
+#   # geom_sf_text(data = coord %>% filter(pop %in% c("4", "6", "7", "8", "9")), aes(label=pop), color="black", inherit.aes = F) +
+#   # geom_sf_text(data = coord %>% filter(pop %in% c("1", "3", "16")), aes(label=pop), color="white", inherit.aes = F) +
+#   # geom_sf_text(data = coord %>% filter(pop %in% c("10")), aes(label=pop), color="black", nudge_y = 0.008, inherit.aes = F) +
+#   ggtitle("2021 sampled populations") +
+#   nsampmap.graphics +
+#   theme(legend.position = "bottom", 
+#         axis.title.y = element_blank(), 
+#         axis.text.y = element_blank(),
+#         legend.title.align = 1) +
+#   guides(size = guide_legend(label.position = "bottom"))
+# pm4
+# 
+# pm5 <- ggmap(az.base) +
+#   geom_sf(data = coord, aes(fill=pop, size=TotSamp), color="black", shape=21, inherit.aes = F) +
+#   geom_sf_text(data = coord %>% filter(pop %in% c("4", "6", "7", "8", "9", "1")), aes(label=pop), color="black", inherit.aes = F) +
+#   geom_sf_text(data = coord %>% filter(pop %in% c("10", "3", "16")), aes(label=pop), color="white", inherit.aes = F) +
+#   ggtitle("Total Samples") +
+#   scale_size_continuous(range = c(2, 12), guide = "legend",
+#                         limits=c(10, 105),
+#                         breaks = c(20, 40, 60, 80, 100)) +
+#   coord_sf(datum = sf::st_crs(coord)) +
+#   scale_fill_manual(values = aztf.pal, aesthetics = "fill", guide = "none", labels = coord$pop) +
+#   labs(x = "Longitude", y = "Latitude", size="# of \nindividuals") +
+#   theme(panel.background = element_blank(),
+#         panel.border = element_rect(fill=NA, color = "black"),
+#         legend.key = element_blank(),
+#         legend.text = element_text(size=15),
+#         legend.title = element_text(size = 15),
+#         plot.title = element_text(face = "bold", size = 18),
+#         axis.title = element_text(size=15),
+#         axis.text = element_text(size=13))
+#   
+# pm5
+# 
+# ggsave(filename = paste0(PATH,"/figures/aztf_samplemap_2014.png"), plot = pm2, width = 6.8, height = 6.5)
+# ggsave(filename = paste0(PATH,"/figures/aztf_samplemap_2019.png"), plot = pm3, width = 6.3, height = 6.5)
+# ggsave(filename = paste0(PATH,"/figures/aztf_samplemap_2021.png"), plot = pm4, width = 6.3, height = 6.5)
+# ggsave(filename = paste0(PATH,"/figures/aztf_samplemap_total.png"), plot = pm5, width = 7, height = 7)
 
 
 #kmz to point for network creation ----

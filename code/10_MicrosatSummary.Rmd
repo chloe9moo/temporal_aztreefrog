@@ -262,3 +262,99 @@ round(null$null.allele.freq$summary2, 2)}
 ```
 
 **Notes:** It seems like frequency of null alleles in each loci is pretty low, regardless of the method used. The exception might be hwri30594. That's the one that had highest linkage and most often out of HWE.  
+
+
+``` {r summary table, echo=F, eval=F}
+sibs <- read.csv(paste0(PATH, "/microsat_data/combined_aztf_loci.csv")) %>% select(-contains('hwri')) %>%
+  filter(!pop %in% c(2, 5, 11, 12, 13, 14, 15)) %>%
+  mutate(year = ifelse(year == 2018, 2019, year)) %>%
+  mutate(year = ifelse(year == 2015, 2014, year), 
+         pop = case_when(pop == "1" ~ 1,
+                         pop == "4" ~ 2,
+                         pop == "3" ~ 3,
+                         pop == "6" ~ 4, 
+                         pop == "7" ~ 5, 
+                         pop == "8" ~ 6, 
+                         pop == "9" ~ 7, 
+                         pop == "10" ~ 8, 
+                         pop == "16" ~ 9),
+         year_pop = paste0(year, "_", pop)) %>%
+  group_by(year_pop) %>% 
+  summarise(N_sib = n(),
+            N_sib_larv = sum(age == "Larvae"))
+nosibs <- read.csv(paste0(PATH, "/microsat_data/combined_aztf_loci_nosibs.csv")) %>% select(-contains('hwri')) %>%
+  filter(!pop %in% c(2, 5, 11, 12, 13, 14, 15)) %>%
+  mutate(year = ifelse(year == 2018, 2019, year)) %>%
+  mutate(year = ifelse(year == 2015, 2014, year), 
+         pop = case_when(pop == "1" ~ 1,
+                         pop == "4" ~ 2,
+                         pop == "3" ~ 3,
+                         pop == "6" ~ 4, 
+                         pop == "7" ~ 5, 
+                         pop == "8" ~ 6, 
+                         pop == "9" ~ 7, 
+                         pop == "10" ~ 8, 
+                         pop == "16" ~ 9),
+         year_pop = paste0(year, "_", pop)) %>%
+  group_by(year_pop) %>% 
+  summarise(N_nosib = n(),
+            N_nosib_larv = sum(age == "Larvae"))
+aztf.final <- read.csv(paste0(PATH, "/microsat_data/final_aztf_loci_nosibs.csv")) %>% select(-contains('hwri')) %>%
+  mutate(year = ifelse(year == 2018, 2019, year)) %>%
+  mutate(year = ifelse(year == 2015, 2014, year), 
+         pop = case_when(pop == "1" ~ 1,
+                         pop == "4" ~ 2,
+                         pop == "3" ~ 3,
+                         pop == "6" ~ 4, 
+                         pop == "7" ~ 5, 
+                         pop == "8" ~ 6, 
+                         pop == "9" ~ 7, 
+                         pop == "10" ~ 8, 
+                         pop == "16" ~ 9),
+         year_pop = paste0(year, "_", pop)) %>%
+  group_by(year_pop) %>% 
+  summarise(N_final = n(),
+            N_final_larv = sum(age == "Larvae"))
+all <- read.csv(paste0(PATH, "/multiyear_hywr_tracking.csv")) %>% filter(Pond.Number != "--") %>%
+  rename(ID = Individual.ID, year = Year.Sampled, pop = Pond.Number, age = Type) %>%
+  filter(!pop %in% c(2, 5, 11, 12, 13, 14, 15)) %>%
+  mutate(year = ifelse(year == 2018, 2019, year)) %>%
+  mutate(year = ifelse(year == 2015, 2014, year), 
+         pop = case_when(pop == "1" ~ 1,
+                         pop == "4" ~ 2,
+                         pop == "3" ~ 3,
+                         pop == "6" ~ 4, 
+                         pop == "7" ~ 5, 
+                         pop == "8" ~ 6, 
+                         pop == "9" ~ 7, 
+                         pop == "10" ~ 8, 
+                         pop == "16" ~ 9),
+         year_pop = paste0(year, "_", pop),
+         age = case_when(age %in% c("Toe", "Adult", "toe", "toe ") ~ "Adult",
+                         age %in% c("Buccal", "Tail", "Larvae", "tail") ~ "Larvae")) %>%
+  select(ID, pop, age, year, year_pop) %>% filter(!is.na(pop)) %>%
+  group_by(year_pop) %>% 
+  summarise(N_cens = n(),
+            N_cens_larv = sum(age == "Larvae"))
+
+summ.table <- all %>% left_join(., sibs) %>% left_join(., nosibs) %>% left_join(aztf.final) %>%
+  mutate(pop = gsub("[0-9]{4}_", "", year_pop),
+         year = gsub("_[0-9]", "", year_pop))
+
+gdiv <- read.csv(paste0(PATH, "/results_tables/hdiv_summary.csv")) %>% filter(group %in% summ.table$year) %>% rename(year = group) %>% 
+  mutate(pop = as.character(pop)) %>%
+  select(-c(H_diff, hdiff)) %>% 
+  mutate(across(c(H_obs, H_exp), ~round(.x, digits = 2)))
+ar <- read.csv(paste0(PATH, "/results_tables/allelic_richness.csv")) %>% filter(group %in% summ.table$year) %>% rename(year = group) %>%
+  mutate(pop = as.character(pop), 
+         m.ar = round(m.ar, digits = 2))
+ne <- read.csv(paste0(PATH, "/results_tables/Ne_Table_nosibs.csv")) %>% select(-Notes) %>% rename(year_pop = Pop) %>%
+  mutate(pop = gsub("[0-9]{4}_", "", year_pop),
+         year = gsub("_[0-9]*$", "", year_pop))
+
+summ.table <- summ.table %>% left_join(., gdiv) %>% left_join(., ar) %>% left_join(., ne)
+
+summ.table <- summ.table %>% relocate(pop, year) %>% select(-year_pop) %>% arrange(pop, year)
+
+write.csv(summ.table, file = paste0(PATH, "/results_tables/Table1_SummaryTable.csv"), row.names = F)
+```

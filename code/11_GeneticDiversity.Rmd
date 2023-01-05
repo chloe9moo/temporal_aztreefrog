@@ -77,6 +77,7 @@ dtheme <- list(
         plot.title = element_text(face = "bold", size = 18),
         axis.title = element_text(size=15),
         axis.text = element_text(size=13),
+        axis.text.x = element_text(angle = 35, vjust = 1, hjust = 1),
         axis.line.x.bottom = element_line(color="black"),
         axis.line.y.left = element_line(color="black"))
 )
@@ -87,15 +88,16 @@ p.ar <- ggplot(data = ar.div %>% filter(!group %in% c("All_Yrs", "All_Pops")), a
   labs(x="Sample Year", y="Rarefied Allelic Richness") +
   dtheme +
   theme(title = element_blank(),
-        legend.position = "right")
+        legend.position = "right") +
+  guides(color = guide_legend(title = "Pond"))
 # p.ar
 ggsave(filename = paste0(PATH, "/figures/delta_allelicrichness_legend.png"), plot = p.ar, width = 3, height = 5.45)
 ```
-\begin{figure}[!h]
-\centering
-\includegraphics[width=0.5\textwidth]{"/home/chloe9mo/Documents/Projects/temporal_aztreefrog//figures/delta_allelicrichness_nolegend.png"}
-\caption{Change in allelic richness over time.}
-\end{figure}
+<!-- \begin{figure}[!h] -->
+<!-- \centering -->
+<!-- \includegraphics[width=0.5\textwidth]{"/home/chloe9mo/Documents/Projects/temporal_aztreefrog//figures/delta_allelicrichness_nolegend.png"} -->
+<!-- \caption{Change in allelic richness over time.} -->
+<!-- \end{figure} -->
 
 ***  
 
@@ -159,7 +161,7 @@ write.csv(div.full, file = paste0(PATH,"/results_tables/hdiv_summary.csv"), row.
 ```
 
 # Change in heterozygosity over time  
-```{r, echo=F, message=F}
+```{r, echo=F, message=F, eval=FALSE}
 div.list <- div.list[-c(1,2)]
 hdiv <- bind_rows(div.list)
 hdiv <- hdiv %>% mutate(hdiff = H_exp - H_obs)
@@ -167,31 +169,44 @@ hdiv <- hdiv %>% mutate(hdiff = H_exp - H_obs)
 p.ho <- ggplot(data = hdiv, aes(x=year, y=H_obs, group=pop)) +
   labs(x="Sample Year", y="Obs. Heterozygosity") +
   dtheme +
-  scale_y_continuous(limits = c(0.58, 0.755), breaks = c(0.60, 0.65, 0.70, 0.75)) +
+  scale_y_continuous(limits = c(0.58, 0.76), breaks = c(0.60, 0.65, 0.70, 0.75)) +
   theme(title = element_blank(),
         legend.position = "none")
 p.he <- ggplot(data = hdiv, aes(x=year, y=H_exp, group=pop)) +
   labs(x="Sample Year", y="Exp. Heterozygosity") +
   dtheme +
-  scale_y_continuous(limits = c(0.58, 0.755), breaks = c(0.60, 0.65, 0.70, 0.75)) +
+  scale_y_continuous(limits = c(0.58, 0.76), breaks = c(0.60, 0.65, 0.70, 0.75)) +
   theme(title = element_blank(),
         legend.position = "none")
 p.hd <- ggplot(data = hdiv, aes(x=year, y=hdiff, group=pop)) +
   geom_rect(xmin = -Inf, xmax = Inf, ymin = -0.1, ymax = 0, fill="blue", alpha = 0.005) +
   geom_rect(xmin = -Inf, xmax = Inf, ymin = 0, ymax = 0.1, fill="red", alpha = 0.005) +
   # geom_hline(yintercept = 0, linetype="dashed", color="red") +
-  scale_y_continuous(limits = c(-0.08, 0.08), breaks = c(-0.08, -0.04, 0, 0.04, 0.08)) +
+  scale_y_continuous(limits = c(-0.092, 0.092), breaks = c(-0.08, -0.04, 0, 0.04, 0.08)) +
   labs(x="Sample Year", y=bquote(~H[e]~ '-' ~H[o]~ '')) +
   dtheme +
   theme(title = element_blank(),
         legend.position = "none")
 
-plot_grid(p.ho, p.he, p.hd, nrow = 1, ncol = 3, labels = "AUTO", rel_widths = c(1, 1, 1.25))
-
 ggsave(filename = paste0(PATH, "/figures/delta_Ho.png"), plot = p.ho, width = 3, height = 5.45)
 ggsave(filename = paste0(PATH, "/figures/delta_He.png"), plot = p.he, width = 3, height = 5.45)
 ggsave(filename = paste0(PATH, "/figures/delta_diffH_nolegend.png"), plot = p.hd, width = 3, height = 5.45)
+
+#aligned figure
+p.ar <- p.ar + labs(x="")
+p.ho <- p.ho + labs(x="")
+p.he <- p.he + labs(x="")
+p.hd <- p.hd + labs(x="")
+p.all <- plot_grid(p.ho, p.he, p.hd, p.ar, nrow = 1, ncol = 4, labels = "AUTO", rel_widths = c(1, 1, 1, 1.25))
+p.all <- add_sub(p.all, "Sample Year", vpadding=grid::unit(0,"lines"),y=6, x=0.5, vjust=4.5)
+ggsave(filename = paste0(PATH, "/figures/delta_GenDiv.png"), plot = p.all, width = 12, height = 6)
 ```
+\begin{figure}[!h]
+\centering
+\includegraphics[width=0.5\textwidth]{"/home/chloe9mo/Documents/Projects/temporal_aztreefrog/figures/delta_GenDiv.png"}
+\caption{Change in allelic richness over time.}
+\end{figure}
+\bigbreak
 
 ***
 # Allele frequencies
@@ -216,14 +231,13 @@ for (i in 1:length(pop.list)) {
 # Effective population size
 
 ``` {r, echo=F, message=F, fig.align="center", warning=F}
-Net <- read.csv(paste0(PATH, "/results_tables/Ne_Table_nosibs.csv"))
-Net <- Net %>% 
-  mutate(year = substr(Pop, 1, 4), pond = as.integer(gsub("^[0-9]{4}.", "", Pop))) %>%
-  select(-Notes) %>% 
-  mutate(year = ifelse(year == 2015, 2014, year))
-Net <- Net %>% mutate(pond = factor(pond)) %>%
-  mutate(pond = fct_relevel(pond, c("1", "3", "4", "6", "7", "8", "9", "10", "16")),
-         #Ne = ifelse(Ne == "Infinite", 800, Ne)) %>% #10000 was the replacement in Mims 2016
+Net <- read.csv(paste0(PATH, "/results_tables/Ne_Table_nosibs.csv")) %>%
+  rename(year_pop = Pop) %>%
+  select(-Notes) %>%
+  mutate(pond = gsub("[0-9]{4}_", "", year_pop),
+         year = gsub("_[0-9]*$", "", year_pop))
+Net <- Net %>% mutate(pond = factor(as.numeric(pond))) %>%
+  mutate(#Ne = ifelse(Ne == "Infinite", 800, Ne)) %>% #10000 was the replacement in Mims 2016
          Ne = ifelse(Ne == "Infinite", NA, Ne)) %>% #removing infinite vals b/c means low sample size?
   mutate(across(starts_with("Ne"), as.numeric))
 
@@ -251,12 +265,12 @@ ggplot(data = Net, aes(x=year, y=Ne, group=pond)) +
 ggsave(filename = paste0(PATH, "/figures/delta_Ne_legend.png"), plot = last_plot(), width = 4, height = 5)
 ```
 
-``` {r, echo=F, message=F, fig.align="center", eval=T}
+``` {r dNe maps, echo=F, message=F, fig.align="center", eval=T}
 library(sf); library(ggmap); library(cowplot); library(RColorBrewer)
 sp.ne <- coord %>%
-  left_join(Net, by=c("year_pop" = "Pop")) %>%
+  left_join(Net %>% select(-year), by=c("year_pop")) %>%
   # filter(!is.na(Ne)) %>%
-  filter(!pop %in% c(2, 5, 11:15)) %>%
+  # filter(!pop %in% c(2, 5, 11:15)) %>%
   st_as_sf(coords=c("lon", "lat"), crs=st_crs(32612)) %>%
   mutate(Ne = ifelse(Ne == "Inf", NA, Ne))#WGS 84 / UTM zone 12N
 sp.ne <- sp.ne %>% left_join(dNet %>% select(pond, d14_19, d19_21, d14_21), by = "pond")
@@ -614,4 +628,9 @@ amova <- poppr::poppr.amova(ind.list[[1]], hier = ~year/pop, method = "ade4")
 system.time(
 amova.test <- ade4::randtest(amova, nrepet = 10)
 )
+```
+``` {r AMOVA read, echo=F, message=F}
+amova.test <- readRDS(paste0(PATH, "/AMOVA_All_10K.rds"))
+amova.test
+plot(amova.test)
 ```
