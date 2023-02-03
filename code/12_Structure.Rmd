@@ -94,7 +94,7 @@ pf <- ggplot(data = g.fst.ci, aes(x=group, y=Fst)) +
   scale_x_discrete(labels=c("All x Pop", "All x Year", "2014", "2019", "2021")) +
   geom_vline(aes(xintercept=2.5), linetype="dashed") +
   labs(y=bquote('Global' ~F[ST])) +
-  ggtitle(bquote('Global' ~F[ST]~ 'with 95% confidence intervals')) +
+  #ggtitle(bquote('Global' ~F[ST]~ 'with 95% confidence intervals')) +
   theme(legend.position = "none",
         panel.background = element_blank(),
         panel.grid = element_line(color="#E5E4E2"),
@@ -220,15 +220,15 @@ ul <- yp.fst$ul %>%
 #make it long
 pw <- hierfstat::genet.dist(ind.list[[6]], method = "Nei87")
 pw <- as.data.frame(as.matrix(pw)) %>%
-  relocate('2015_1', '2021_1',
-           '2015_3', '2021_3',
-           '2015_4', '2019_4', '2021_4',
-           '2015_6', '2019_6', '2021_6',
-           '2015_7', '2019_7', '2021_7',
-           '2015_8', '2019_8', '2021_8',
-           '2015_9', '2019_9', '2021_9',
-           '2015_10', '2021_10',
-           '2019_16', '2021_16')
+  relocate('2014_1', '2021_1',
+           '2014_3', '2021_3',
+           '2014_2', '2019_2', '2021_2',
+           '2014_4', '2019_4', '2021_4',
+           '2014_5', '2019_5', '2021_5',
+           '2014_6', '2019_6', '2021_6',
+           '2014_7', '2019_7', '2021_7',
+           '2014_8', '2021_8',
+           '2019_9', '2021_9')
 pw <- pw %>%
   rownames_to_column(var="group") %>%
   arrange(factor(group, levels = names(pw))) %>%
@@ -326,15 +326,16 @@ write.csv(dps, file=paste0(PATH, "/results_tables/", ind.names[[i]], "_pairwiseD
 }
 
 pw <- as.data.frame(as.matrix(dps)) %>%
-  relocate('2015_1', '2021_1',
-           '2015_3', '2021_3',
-           '2015_4', '2019_4', '2021_4',
-           '2015_6', '2019_6', '2021_6',
-           '2015_7', '2019_7', '2021_7',
-           '2015_8', '2019_8', '2021_8',
-           '2015_9', '2019_9', '2021_9',
-           '2015_10', '2021_10',
-           '2019_16', '2021_16')
+  relocate('2014_1', '2021_1',
+           '2014_3', '2021_3',
+           '2014_2', '2019_2', '2021_2',
+           '2014_4', '2019_4', '2021_4',
+           '2014_5', '2019_5', '2021_5',
+           '2014_6', '2019_6', '2021_6',
+           '2014_7', '2019_7', '2021_7',
+           '2014_8', '2021_8',
+           '2019_9', '2021_9')
+
 pw.long <- pw %>%
   mutate(X = row.names(.)) %>%
   mutate(X = fct_relevel(factor(X), gsub("X", "", names(pw)))) %>%
@@ -362,15 +363,16 @@ ggsave(paste0(PATH, "/figures/pairwiseDps_heatmap_", ind.names[[6]], ".png"), pl
 #boxplot
 dps[upper.tri(dps)] <- NA
 pw <- as.data.frame(as.matrix(dps)) %>%
-  relocate('2015_1', '2021_1',
-           '2015_3', '2021_3',
-           '2015_4', '2019_4', '2021_4',
-           '2015_6', '2019_6', '2021_6',
-           '2015_7', '2019_7', '2021_7',
-           '2015_8', '2019_8', '2021_8',
-           '2015_9', '2019_9', '2021_9',
-           '2015_10', '2021_10',
-           '2019_16', '2021_16')
+  relocate('2014_1', '2021_1',
+           '2014_3', '2021_3',
+           '2014_2', '2019_2', '2021_2',
+           '2014_4', '2019_4', '2021_4',
+           '2014_5', '2019_5', '2021_5',
+           '2014_6', '2019_6', '2021_6',
+           '2014_7', '2019_7', '2021_7',
+           '2014_8', '2021_8',
+           '2019_9', '2021_9')
+
 pw.long <- pw %>%
   mutate(X = row.names(.)) %>%
   mutate(X = fct_relevel(factor(X), gsub("X", "", names(pw)))) %>%
@@ -409,8 +411,8 @@ dps.time <- ggplot(data = pw.box, aes(group, Dps)) +
 ggsave(paste0(PATH, "/figures/TemporalDps_boxplot.png"), plot=dps.time, width = 5, height = 6)
 
 pw.box %>% filter(group == "Pop A vs Pop A \nin previous years") %>% slice_max(Dps, n=5)
-pw.box %>% filter(pop1 == "10" | pop2 == "10") %>% filter(pop1 != pop2) %>% mutate(mean = mean(Dps)) #avg. is 0.373
-pw.box %>% filter(pop1 == "10" | pop2 == "10") %>% filter(pop1 == pop2) %>% mutate(mean = mean(Dps)) #0.308
+pw.box %>% filter(pop1 == "8" | pop2 == "8") %>% filter(pop1 != pop2) %>% mutate(mean = mean(Dps)) #avg. is 0.375
+pw.box %>% filter(pop1 == "8" | pop2 == "8") %>% filter(pop1 == pop2) %>% mutate(mean = mean(Dps)) #0.308
 ```
 
 ### G~ST~  
@@ -420,9 +422,10 @@ pw.box %>% filter(pop1 == "10" | pop2 == "10") %>% filter(pop1 == pop2) %>% muta
 library(mmod)
 
 gst.list <- list()
-for (i in 1:length(ind.list)) {
+for (i in 1:length(ind.list[-6])) {
   diff_stats(ind.list[[i]])
   b.g <- chao_bootstrap(ind.list[[i]], nreps = 10000)
+  cat(ind.names[[i]], "complete...\n")
   b.gd <- summarise_bootstrap(b.g, Gst_Hedrick)
   gst.list[[i]] <- b.gd
 }
@@ -479,15 +482,15 @@ pw <- read.csv(paste0(PATH, "/results_tables/Year_Pop_pairwiseGst.csv")) %>% col
 pw[upper.tri(pw)] <- t(pw)[upper.tri(pw)]
 pw <- pw %>% 
   rename_with(.cols = starts_with("X2"), .fn = ~ gsub("X", "", .x)) %>%
-  relocate('2015_1', '2021_1',
-           '2015_3', '2021_3',
-           '2015_4', '2019_4', '2021_4',
-           '2015_6', '2019_6', '2021_6',
-           '2015_7', '2019_7', '2021_7',
-           '2015_8', '2019_8', '2021_8',
-           '2015_9', '2019_9', '2021_9',
-           '2015_10', '2021_10',
-           '2019_16', '2021_16')
+  relocate('2014_1', '2021_1',
+           '2014_3', '2021_3',
+           '2014_2', '2019_2', '2021_2',
+           '2014_4', '2019_4', '2021_4',
+           '2014_5', '2019_5', '2021_5',
+           '2014_6', '2019_6', '2021_6',
+           '2014_7', '2019_7', '2021_7',
+           '2014_8', '2021_8',
+           '2019_9', '2021_9')
 pw.long <- pw %>%
   rownames_to_column("X") %>%
   mutate(X = fct_relevel(factor(X), gsub("X", "", names(pw)))) %>%
@@ -513,15 +516,15 @@ ggsave(paste0(PATH, "/figures/pairwiseGst_heatmap_", ind.names[[6]], ".png"), pl
 pw <- read.csv(paste0(PATH, "/results_tables/Year_Pop_pairwiseGst.csv"))
 pw <- pw %>% 
   rename_with(.cols = starts_with("X2"), .fn = ~ gsub("X", "", .x)) %>%
-  relocate('X', '2015_1', '2021_1',
-           '2015_3', '2021_3',
-           '2015_4', '2019_4', '2021_4',
-           '2015_6', '2019_6', '2021_6',
-           '2015_7', '2019_7', '2021_7',
-           '2015_8', '2019_8', '2021_8',
-           '2015_9', '2019_9', '2021_9',
-           '2015_10', '2021_10',
-           '2019_16', '2021_16')
+  relocate('X', '2014_1', '2021_1',
+           '2014_3', '2021_3',
+           '2014_2', '2019_2', '2021_2',
+           '2014_4', '2019_4', '2021_4',
+           '2014_5', '2019_5', '2021_5',
+           '2014_6', '2019_6', '2021_6',
+           '2014_7', '2019_7', '2021_7',
+           '2014_8', '2021_8',
+           '2019_9', '2021_9')
 pw.long <- pw %>%
   mutate(X = fct_relevel(factor(X), gsub("X", "", names(pw[,-1])))) %>%
   pivot_longer(cols = starts_with("20"), names_to = "X2", values_to = "pGst") %>%
@@ -555,7 +558,7 @@ gst.time <- ggplot(data = pw.box, aes(group, pGst)) +
         panel.grid.minor = element_blank(),
         panel.background = element_blank(),
         axis.line = element_line(color = "black"))
-# dps.time
+# gst.time
 ggsave(paste0(PATH, "/figures/TemporalGst_boxplot.png"), plot=gst.time, width = 5, height = 6)
 
 # pw.box %>% filter(group == "Pop A vs Pop A \nin previous years") %>% slice_max(pGst, n=5)
@@ -567,25 +570,6 @@ ggsave(paste0(PATH, "/figures/TemporalGst_boxplot.png"), plot=gst.time, width = 
   \caption{Comparison of global Gst values with single year and multi-year groupings, population structure vs year structure.}
 \end{figure}
 <br>
-<br>
-
-#### Gst x Distance  
-\begin{figure}[!hb]
-  \centering
-  \includegraphics[width=0.45\textwidth]{"/home/chloe9mo/Documents/Projects/temporal_aztreefrog/figures/Dist_x_Gst_All Yrs - Indiv x Year.png"}
-  \includegraphics[width=0.45\textwidth]{"/home/chloe9mo/Documents/Projects/temporal_aztreefrog/figures/Dist_x_Gst_All Yrs - Indiv x Pop.png"}
-  \caption{Across year comparison of genetic x euclidian distance between populations or time.}
-\end{figure}
-\pagebreak
-
-\begin{figure}[!ht]
-  \centering
-  \includegraphics[width=0.4\textwidth]{"/home/chloe9mo/Documents/Projects/temporal_aztreefrog/figures/Dist_x_Gst_Indiv 2014.png"}
-  \includegraphics[width=0.4\textwidth]{"/home/chloe9mo/Documents/Projects/temporal_aztreefrog/figures/Dist_x_Gst_Indiv 2019.png"}
-  \includegraphics[width=0.4\textwidth]{"/home/chloe9mo/Documents/Projects/temporal_aztreefrog/figures/Dist_x_Gst_Indiv 2021.png"}
-  \caption{Individual year comparison of genetic x euclidian distance.}
-\end{figure}
-
 <br>
 
 ---
@@ -642,7 +626,7 @@ pca.all <- pca.list[[1]]$li %>%
   mutate(ID = row.names(.)) %>% 
   left_join(aztf, by = "ID") %>% 
   select(ID, year, pop, Axis1, Axis2) %>%
-  mutate(pop = fct_relevel(factor(pop), c("1", "3", "4", "6", "7", "8", "9", "10", "16")),
+  mutate(pop = as.factor(as.numeric(pop)),
          year = fct_relevel(factor(year), c("2014", "2019", "2021")))
 
 pca.theme <- list(
@@ -695,7 +679,7 @@ ggsave(filename = paste0(PATH,"/figures/PCA_xPop.png"), plot = pca, width = 8, h
 ### DAPC  
 Clusters were selected by lowest BIC, if more than one cluster had similar BIC, they all were looked at.  
 When selecting the number of PCs, looked at PC x Cumulative Variance plot and visually picked, also used a score. Compared outputs from both.  
-*DAPC run in 12a_DAPC.R script*  
+*DAPC run in 12d_DAPC.R script*  
 
 \begin{figure}[!ht]
   \centering

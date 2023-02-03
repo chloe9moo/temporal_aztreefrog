@@ -52,3 +52,13 @@ For each metric, almost all years have some IBD, with 2021 most significant, fol
   \caption{IBD for three sample years, using proportion of shared alleles. Black line is lm(y~x), red line is loess smooth y~x.}
 \end{figure}
 
+\begin{figure}[!hb]
+  \centering
+  \includegraphics[width=0.4\textwidth]{"/home/chloe9mo/Documents/Projects/temporal_aztreefrog/figures/Dist_x_Gst_2014 IBD.png"}
+  \includegraphics[width=0.4\textwidth]{"/home/chloe9mo/Documents/Projects/temporal_aztreefrog/figures/Dist_x_Gst_2019 IBD.png"}
+  \includegraphics[width=0.4\textwidth]{"/home/chloe9mo/Documents/Projects/temporal_aztreefrog/figures/Dist_x_Gst_2021 IBD.png"}
+  \caption{Individual year comparison of genetic x euclidian distance.}
+\end{figure}
+
+<br>
+

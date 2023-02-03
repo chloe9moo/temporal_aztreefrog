@@ -61,6 +61,8 @@ aztf <- aztf %>%
   group_by(pop) %>% filter(n() > 5) #remove small n populations
 write.csv(aztf, file = paste0(PATH, "/microsat_data/final_aztf_loci_nosibs.csv"), row.names = F)
 # write.csv(aztf, file = paste0(PATH, "/microsat_data/final_aztf_loci_sibs.csv"), row.names = F)
+# aztf.prefinal <- read.csv(paste0(PATH, "/microsat_data/combined_aztf_loci_nosibs.csv"))
+# aztf.final <- read.csv(paste0(PATH, "/microsat_data/final_aztf_loci_nosibs.csv"))
 
 rm(pct.ind.na, pct.loci.na)
 ```
@@ -180,6 +182,8 @@ kable(globalHWE[,c(1:4)], caption = "Global HWE across all years")
 kable(globalHWE[,c(5:8)], caption = "Global HWE in 2015")
 kable(globalHWE[,c(9:12)], caption = "Global HWE in 2019")
 kable(globalHWE[,c(13:16)], caption = "Global HWE in 2021")
+
+write.csv(globalHWE, paste0(PATH, "/results_tables/GlobalHWE_AllYears.csv"), row.names = T)
 ```
 **Notes:** Most loci out of HWE except primarily for hwri34484, hwri4269, hwri2932 across years and in 2015, but 2019 and 2021 have several loci not?  
 
@@ -357,4 +361,51 @@ summ.table <- summ.table %>% left_join(., gdiv) %>% left_join(., ar) %>% left_jo
 summ.table <- summ.table %>% relocate(pop, year) %>% select(-year_pop) %>% arrange(pop, year)
 
 write.csv(summ.table, file = paste0(PATH, "/results_tables/Table1_SummaryTable.csv"), row.names = F)
+
+#looking at various max and min values
+summ.table <- read.csv(paste0(PATH, "/results_tables/Table1_SummaryTable.csv")) #note, 2 adults were removed (2021_4 and 2021_5) because I might have switched them during lab work
+summ.table %>% group_by(year) %>% summarise(sum(N_sib)) #number of individuals per year
+summ.table %>% summarise(mean(N_sib), min(N_sib), max(N_sib)) #summary pop x year
+summ.table %>% mutate(N_lost = N_sib - N_nosib) %>% group_by(year) %>% summarise(sum(N_lost))
+summ.table %>% mutate(N_lost = N_sib - N_nosib) %>% summarise(mean(N_lost), min(N_lost), max(N_lost))
+summ.table %>% summarise(mean(N_final), min(N_final), max(N_final))
+summ.table %>% group_by(year) %>% slice_min(m.ar, n=1) %>% select(year_pop, m.ar)
+summ.table %>% group_by(year) %>% slice_max(m.ar, n=1) %>% select(year_pop, m.ar)
+summ.table %>% na_if("Infinite") %>% mutate(across(contains("Ne"), as.numeric)) %>% group_by(year) %>% summarise(mean(Ne, na.rm = T), min(Ne.Low, na.rm = T), max(Ne.High, na.rm = T))
+summ.table %>% na_if("Infinite") %>% mutate(across(contains("Ne"), as.numeric)) %>% group_by(year) %>% slice_min(Ne, n=1) %>% select(year_pop, Ne, Ne.Low, Ne.High)
+
+#average change over time
+#He and Ho
+summ.table %>% 
+  select(pop, year, H_obs, H_exp) %>%
+  pivot_wider(names_from = year, values_from = c(H_obs, H_exp)) %>%
+  mutate(obs_d_14_19 = ((H_obs_2019 - H_obs_2014)/H_obs_2014)*100,
+         obs_d_19_21 = ((H_obs_2021 - H_obs_2019)/H_obs_2019)*100,
+         obs_d_14_21 = ((H_obs_2021 - H_obs_2014)/H_obs_2014)*100,
+         exp_d_14_19 = ((H_exp_2019 - H_exp_2014)/H_exp_2014)*100,
+         exp_d_19_21 = ((H_exp_2021 - H_exp_2019)/H_exp_2019)*100,
+         exp_d_14_21 = ((H_exp_2021 - H_exp_2014)/H_exp_2014)*100)
+#He - Ho
+summ.table %>% mutate(H_diff = H_exp - H_obs) %>%
+  select(pop, year, H_diff) %>%
+  pivot_wider(names_from = year, values_from = c(H_diff)) %>%
+  mutate(t_diff = `2021`- `2014`)
+#AR
+summ.table %>% 
+  select(pop, year, m.ar) %>%
+  pivot_wider(names_from = year, values_from = m.ar) %>%
+  mutate(ar_d_14_19 = ((`2019` - `2014`)/`2014`)*100,
+         ar_d_19_21 = ((`2021` - `2019`)/`2019`)*100,
+         ar_d_14_21 = ((`2021` - `2014`)/`2014`)*100) %>%
+  mutate(mean_change = mean(ar_d_14_21, na.rm = T)) 
+#Ne
+summ.table %>%
+  select(pop, year, Ne) %>%
+  na_if("Infinite") %>%
+  pivot_wider(names_from = year, values_from = Ne) %>%
+  mutate(across(everything(), as.numeric)) %>%
+  mutate(ne_d_14_19 = ((`2019` - `2014`)/`2014`)*100,
+         ne_d_19_21 = ((`2021` - `2019`)/`2019`)*100,
+         ne_d_14_21 = ((`2021` - `2014`)/`2014`)*100) %>% 
+  View()
 ```

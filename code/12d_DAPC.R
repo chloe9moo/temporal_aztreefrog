@@ -53,29 +53,123 @@ bic.m <- bic.m %>%
   arrange(K)
 p1 <- ggplot(bic.m, aes(x = K, y = BIC)) + geom_boxplot() + theme_bw() + xlab("Number of groups (K)")
 p1
-
+ggsave(paste0(PATH, "/figures/DAPC_Year_Pop_BIC.png"), plot = p1, width = 7, height = 5)
 #retaining too many components with respect to the number of individuals can lead to over-fitting and unstability
 ##in the membership probabilities returned by the method
+grp <- find.clusters(ind.list[[p]], n.clust = 7, n.pca = 200)
 dapc1 <- dapc(ind.list[[p]], grp$grp)
-
 #look at plots
 scatter(dapc1, posi.da="bottomright", bg="white",
         pch=17:24, cstar=0, scree.pca=TRUE,
         posi.pca="bottomleft")
 assignplot(dapc1, subset=1:50)
 
-dapc1 <- dapc(ind.list[[p]], grp$grp, n.da = 100, n.pca = 100)
+dapc1 <- dapc(ind.list[[p]], grp$grp, n.da = 100, n.pca = 80)
 
 ##+ optimal pcs to retain based on a score ----
-dapc1 <- dapc(ind.list[[p]], grp$grp, n.da = 100, n.pca = 100)
-temp <- optim.a.score(dapc1)
+dapc100 <- dapc(ind.list[[p]], grp$grp, n.da = 100, n.pca = 200)
+temp <- optim.a.score(dapc100)
 dapc1 <- dapc(ind.list[[p]], grp$grp, n.da=100, n.pca = temp$best)
 
 scatter(dapc1, posi.da="bottomright", bg="white",
         pch=17:24, cstar=0, scree.pca=TRUE,
         posi.pca="bottomleft")
 
-##+ K iterations ----
+#plot k=7 change over time ----
+temp <- as.data.frame(dapc1$ind.coord)
+temp$Group <- dapc1$grp
+dapc2plot <- temp %>% 
+  mutate(ID = row.names(.)) %>% 
+  left_join(aztf, by = "ID") %>% 
+  select(ID, year, pop, Group, starts_with("LD")) %>%
+  mutate(pop = as.factor(as.numeric(pop)),
+         year = fct_relevel(factor(year), c("2014", "2019", "2021")),
+         year_pop = as.factor(paste0(year, "_", pop)))
+write.csv(dapc2plot, file=paste0(PATH, "/results_tables/DAPC_res/", ind.names[[p]], "_K7.csv"), row.names = F)
+
+##+ get year_pop group center ----
+centroids <- aggregate(cbind(LD1, LD2, LD3, LD4, LD5, LD6) ~ year_pop, dapc2plot, mean) %>%
+  left_join(., dapc2plot %>% select(year_pop, pop, year) %>% distinct())
+
+##+ set theme ----
+grays <- c("#CCCCCC", "#999999", "#333333")
+pca.theme <- list(
+  scale_shape_manual(values = c(21, 22, 23)),
+  theme(legend.position = "right", 
+        panel.background = element_blank(), 
+        panel.grid.major = element_line(colour = "gray", linetype = 4),
+        axis.title = element_text(size = 23),
+        axis.text = element_text(size = 20),
+        legend.title = element_text(size = 20),
+        legend.text = element_text(size = 18),
+        legend.key = element_blank(),
+        plot.title = element_text(face="bold",size=23)),
+  scale_y_continuous(breaks = c(-5, 0, 5), limits = c(-10, 5)) )
+##set axis to plot
+axis1 <- "LD1"
+axis2 <- "LD2"
+
+ggplot() +
+  stat_ellipse(data = dapc2plot, aes(x=.data[[axis1]], y=.data[[axis2]], fill=pop, group=pop), geom="polygon", type = "t", alpha = 0.4, size=1, level = 0.9, show.legend = F) +
+  stat_ellipse(data = dapc2plot, aes(x=.data[[axis1]], y=.data[[axis2]], group=Group), color="white", type = "t", alpha = 0.95, linewidth=0.7, level = 0.8) +
+  geom_point(data = centroids %>% filter(pop == 4), aes(x=.data[[axis1]], y=.data[[axis2]], fill=pop, shape=year), size=5, alpha=1) +
+  geom_path(data = centroids %>% filter(pop == 4), aes(x=.data[[axis1]], y=.data[[axis2]], group = pop), arrow = arrow(type = "closed", length=unit(0.08, "inches"))) +
+  geom_point(data = centroids %>% filter(pop == 5), aes(x=.data[[axis1]], y=.data[[axis2]], fill=pop, shape=year), size=5, alpha=1) +
+  geom_path(data = centroids %>% filter(pop == 5), aes(x=.data[[axis1]], y=.data[[axis2]], group = pop), arrow = arrow(type = "closed", length=unit(0.08, "inches"))) +
+  geom_point(data = centroids %>% arrange(pop) %>% filter(!pop %in% c(4, 5)), aes(x=.data[[axis1]], y=.data[[axis2]], fill=pop, shape=year), size=5, alpha=1) +
+  geom_path(data = centroids %>% arrange(year) %>% filter(!pop %in% c(4, 5)), aes(x=.data[[axis1]], y=.data[[axis2]], group = pop), arrow = arrow(type = "closed", length=unit(0.08, "inches"))) +
+  scale_fill_manual(values = aztf.pal, aesthetics = "fill") +
+  scale_shape_manual(values = c(21, 22, 23)) +
+  guides(fill = guide_legend(override.aes=list(shape=21)), color="none") +
+  labs(x=axis1, y=axis2, fill="Pond", color="Group", shape="Year") +
+  theme(legend.position = "right", 
+        panel.background = element_blank(), 
+        panel.grid.major = element_line(colour = "gray", linetype = 4),
+        legend.key = element_blank())
+ggsave(filename = paste0(PATH, "/figures/DAPC_All_K7_OverTime.png"), plot = last_plot(), width = 6, height = 5)
+
+#+ scree plots ----
+pc.eig <- 100 * cumsum(dapc100$pca.eig) / sum(dapc100$pca.eig)
+pc.eig <- data.frame(n_pca = seq(1, length(pc.eig), 1), eig = pc.eig) %>%
+  mutate(include = case_when(n_pca < 16 ~ "IN", T ~ "OUT"))
+ggplot() +
+  geom_col(data = pc.eig, aes(x = n_pca, y = eig, fill = include), show.legend = F) +
+  labs(title = "PCA eigenvalues", x = "", y = "") +
+  scale_fill_manual(values = c("IN" = "black", "OUT" = "grey")) +
+  theme_classic() +
+  theme(axis.text = element_blank(), axis.ticks = element_blank())
+ggsave(paste0(PATH, "/figures/DAPC_All_K7_PCAeig.png"), plot = last_plot(), width = 6, height = 5)
+
+da.eig <- data.frame(n_da = seq(1, length(dapc1$eig), 1), eig = dapc1$eig) %>%
+  mutate(include = case_when(n_da < 3 ~ "IN", T ~ "OUT"))
+ggplot() +
+  geom_col(data = da.eig, aes(x = n_da, y = eig, fill = include), show.legend = F) +
+  labs(title = "DA eigenvalues", x = "", y = "") +
+  scale_fill_manual(values = c("IN" = "#5A5A5A", "OUT" = "lightgrey")) +
+  theme_classic() +
+  theme(axis.text = element_blank(), axis.ticks = element_blank())
+ggsave(paste0(PATH, "/figures/DAPC_All_K7_DAeig.png"), plot = last_plot(), width = 6, height = 5)
+
+##+ calculate distance between points ----
+#sqrt( (LD1 - LD1)^2 + (LD2 - LD2)^2)
+dapc_dist <- centroids %>%
+  arrange(pop, year) %>%
+  group_by(pop) %>%
+  mutate(across(contains("LD"), ~ (.x - lag(.x, default = NA))^2, .names = "{.col}_delt2"), #(deltaLD)^2
+         delta_yrs = paste0(lag(year, default = NA), "_", year)) %>%
+  select(pop, contains("delt")) %>%
+  filter(!is.na(LD1_delt2)) %>%
+  ungroup() %>%
+  rowwise(pop, delta_yrs) %>%
+  summarise(dist = sqrt( sum( c_across( contains("delt2") ) ) ))
+write.csv(dapc_dist, file = paste0(PATH, "/results_tables/DAPC_distance_traveled.csv"), row.names = F)
+
+#average change
+dapc_dist %>% group_by(pop) %>% mutate(m = mean(dist)) %>% select(pop, m) %>% distinct() %>% View()
+
+##+ calculate dispersion through time ----
+
+#multiple Ks iterations ----
 my_k <- 6:8
 
 grp_l <- vector(mode = "list", length = length(my_k))
@@ -89,22 +183,6 @@ for(i in 1:length(dapc_l)){
 }
 
 ##+ plotting ----
-###++ set theme ----
-grays <- c("#CCCCCC", "#999999", "#333333")
-pca.theme <- list(
-  scale_shape_manual(values = c(21, 22, 23)),
-  theme(legend.position = "right", 
-        panel.background = element_blank(), 
-        panel.grid.major = element_line(colour = "gray", linetype = 4),
-        axis.title = element_text(size = 23),
-        axis.text = element_text(size = 20),
-        legend.title = element_text(size = 20),
-        legend.text = element_text(size = 18),
-        legend.key = element_blank(),
-        plot.title = element_text(face="bold",size=23)),
-  scale_y_continuous(breaks = c(-5, 0, 5), limits = c(-10, 5))
-)
-
 ###++ make plot list ----
 # to compare clusters
 dplot_l <- vector(mode = "list", length = length(my_k))
@@ -126,7 +204,7 @@ for (i in 1:length(dapc_l)) {
       mutate(ID = row.names(.)) %>% 
       left_join(aztf, by = "ID") %>% 
       select(ID, year, pop, Group, starts_with("LD")) %>%
-      mutate(pop = fct_relevel(factor(pop), c("1", "3", "4", "6", "7", "8", "9", "10", "16")),
+      mutate(pop = as.factor(as.numeric(pop)),
              year = fct_relevel(factor(year), c("2014", "2019", "2021")))
     }
   
@@ -182,10 +260,14 @@ ggsave(filename = paste0(PATH, "/figures/DAPC_", ind.names[[p]], "_clustercomp.p
 
 # change over time dapc ----
 # only relevant to year_pop grouping!
-#not using k clustering to assessing groups
+#not using k clustering to assess groups
 dapc.o <- dapc(ind.list[[6]], n.da = 100, n.pca = 100)
 temp <- optim.a.score(dapc.o)
 dapc.o <- dapc(ind.list[[6]], n.da = 100, n.pca = temp$best)
+
+#cross validation pc selection
+temp <- xvalDapc(tab(ind.list[[6]], NA.method = "mean"), pop(ind.list[[6]]))
+dapc.o <- dapc(ind.list[[6]], n.da = 100, n.pca = as.numeric(temp$`Number of PCs Achieving Highest Mean Success`))
 
 #make a dataframe from dapc output
 temp <- as.data.frame(dapc.o$ind.coord)
@@ -196,7 +278,7 @@ dapc2plot <- temp %>%
   mutate(ID = row.names(.)) %>% 
   left_join(aztf, by = "ID") %>% 
   select(ID, year, pop, Group, starts_with("LD")) %>%
-  mutate(pop = fct_relevel(factor(pop), c("1", "3", "4", "6", "7", "8", "9", "10", "16")),
+  mutate(pop = as.factor(as.numeric(pop)),
          year = fct_relevel(factor(year), c("2014", "2019", "2021")))
 
 #save

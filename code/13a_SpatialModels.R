@@ -29,10 +29,29 @@ rm(yr.coord, ind_aztf_yr)
 
 st.d <- read.csv(paste0(PATH, "/results_tables/RiverDist_Matrix.csv")) %>% 
   dplyr::select(-X) %>%
+  mutate(pop = case_when(pop == "1" ~ 1,
+                         pop == "4" ~ 2,
+                         pop == "3" ~ 3,
+                         pop == "6" ~ 4, 
+                         pop == "7" ~ 5, 
+                         pop == "8" ~ 6, 
+                         pop == "9" ~ 7, 
+                         pop == "10" ~ 8, 
+                         pop == "16" ~ 9)) %>%
   arrange(pop) %>%
   column_to_rownames("pop") %>%
   rename_with(.cols = everything(), ~ gsub("X", "", .x)) %>%
+  rename_with(.cols = everything(), ~ case_when(.x == "1" ~ 1,
+                                                .x == "4" ~ 2,
+                                                .x == "3" ~ 3,
+                                                .x == "6" ~ 4, 
+                                                .x == "7" ~ 5, 
+                                                .x == "8" ~ 6, 
+                                                .x == "9" ~ 7, 
+                                                .x == "10" ~ 8, 
+                                                .x == "16" ~ 9)) %>%
   relocate(row.names(.))
+
 
 ##+ GST ----
 
@@ -103,11 +122,12 @@ dist_plot_gst <- function(genind.obj, title, gen.transform = T, geo.tranform = F
                     contour = FALSE,
                     show.legend = FALSE) +
     geom_point() +
-    geom_smooth(method = "lm", formula = y~x, se = F, color="black", size=0.5) +
+    geom_smooth(method = "lm", formula = y~x, se = F, color="black", linewidth=0.5) +
     #geom_smooth(method = "loess", formula = y~x, se = F, color="red", size=0.5) +
     scale_fill_viridis_c() +
     labs(x=x_title, y=y_title, title = title) +
     theme_minimal()
+  ggsave(paste0(PATH, "/figures/Dist_x_Gst_", title, ".png"), plot = p, width = 5, height = 4) 
   return(p)
 }
 
