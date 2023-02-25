@@ -87,6 +87,11 @@ dapc2plot <- temp %>%
          year_pop = as.factor(paste0(year, "_", pop)))
 write.csv(dapc2plot, file=paste0(PATH, "/results_tables/DAPC_res/", ind.names[[p]], "_K7.csv"), row.names = F)
 
+dapc2plot <- read.csv(paste0(PATH, "/results_tables/DAPC_res/", ind.names[[p]], "_K7.csv")) %>%
+  mutate(pop = as.factor(as.numeric(pop)),
+         year = fct_relevel(factor(year), c("2014", "2019", "2021")),
+         year_pop = as.factor(paste0(year, "_", pop)))
+
 ##+ get year_pop group center ----
 centroids <- aggregate(cbind(LD1, LD2, LD3, LD4, LD5, LD6) ~ year_pop, dapc2plot, mean) %>%
   left_join(., dapc2plot %>% select(year_pop, pop, year) %>% distinct())
@@ -111,7 +116,7 @@ axis2 <- "LD2"
 
 ggplot() +
   stat_ellipse(data = dapc2plot, aes(x=.data[[axis1]], y=.data[[axis2]], fill=pop, group=pop), geom="polygon", type = "t", alpha = 0.4, size=1, level = 0.9, show.legend = F) +
-  stat_ellipse(data = dapc2plot, aes(x=.data[[axis1]], y=.data[[axis2]], group=Group), color="white", type = "t", alpha = 0.95, linewidth=0.7, level = 0.8) +
+  #stat_ellipse(data = dapc2plot, aes(x=.data[[axis1]], y=.data[[axis2]], group=Group), color="white", type = "t", alpha = 0.95, linewidth=0.7, level = 0.8) +
   geom_point(data = centroids %>% filter(pop == 4), aes(x=.data[[axis1]], y=.data[[axis2]], fill=pop, shape=year), size=5, alpha=1) +
   geom_path(data = centroids %>% filter(pop == 4), aes(x=.data[[axis1]], y=.data[[axis2]], group = pop), arrow = arrow(type = "closed", length=unit(0.08, "inches"))) +
   geom_point(data = centroids %>% filter(pop == 5), aes(x=.data[[axis1]], y=.data[[axis2]], fill=pop, shape=year), size=5, alpha=1) +
@@ -162,12 +167,24 @@ dapc_dist <- centroids %>%
   ungroup() %>%
   rowwise(pop, delta_yrs) %>%
   summarise(dist = sqrt( sum( c_across( contains("delt2") ) ) ))
+long_dist <- centroids %>%
+  filter(year != 2019) %>%
+  arrange(pop, year) %>%
+  group_by(pop) %>%
+  mutate(across(contains("LD"), ~ (.x - lag(.x, default = NA))^2, .names = "{.col}_delt2"), #(deltaLD)^2
+         delta_yrs = paste0(lag(year, default = NA), "_", year)) %>%
+  select(pop, contains("delt")) %>%
+  filter(!is.na(LD1_delt2)) %>%
+  ungroup() %>%
+  rowwise(pop, delta_yrs) %>%
+  summarise(dist = sqrt( sum( c_across( contains("delt2") ) ) ))
+dapc_dist <- bind_rows(dapc_dist, long_dist) %>% distinct() %>% arrange(pop)
 write.csv(dapc_dist, file = paste0(PATH, "/results_tables/DAPC_distance_traveled.csv"), row.names = F)
+
+dapc_dist %>% filter(delta_yrs == "2014_2021") %>% View()
 
 #average change
 dapc_dist %>% group_by(pop) %>% mutate(m = mean(dist)) %>% select(pop, m) %>% distinct() %>% View()
-
-##+ calculate dispersion through time ----
 
 #multiple Ks iterations ----
 my_k <- 6:8

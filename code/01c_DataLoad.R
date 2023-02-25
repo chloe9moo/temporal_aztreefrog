@@ -16,6 +16,7 @@ aztf <- aztf %>% mutate(year = ifelse(year == 2018, 2019, year)) %>%
                          pop == "10" ~ 8, 
                          pop == "16" ~ 9),
          year_pop = paste0(year, "_", pop))
+# aztf <- aztf %>% filter(!year_pop %in% c("2021_8","2019_9")) #<< used this to look at how AR changes
 coord <- read.csv(paste0(PATH, "/pond_coordinates.csv")) %>% arrange(pop) %>%
   filter(!pop %in% c(2, 5, 11, 12, 13, 14, 15)) %>%
   mutate(pop = case_when(pop == "1" ~ 1,
@@ -30,8 +31,9 @@ coord <- read.csv(paste0(PATH, "/pond_coordinates.csv")) %>% arrange(pop) %>%
                          T ~ 100),
          year = gsub("_[0-9]*$", "", year_pop),
          year = ifelse(year == 2015, 2014, year), 
-         year_pop = paste0(year, "_", pop))
-pop.coord <- coord %>% dplyr::select(pop, lon, lat) %>% unique() %>% remove_rownames() %>% column_to_rownames("pop")
+         year_pop = paste0(year, "_", pop)) %>%
+  arrange(pop, year)
+pop.coord <- coord %>% dplyr::select(pop, lon, lat) %>% unique() %>% remove_rownames() %>% column_to_rownames("pop") 
 
 ind_aztf_pop <- df2genind(aztf[,c(6:22)], sep = "/", ind.names = aztf$ID, NA.char = "-1/-1")
 ind_aztf_pop@pop <- as.factor(aztf$pop) #assign populations

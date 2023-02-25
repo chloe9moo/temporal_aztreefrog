@@ -39,6 +39,7 @@ ar.list <- list()
 
 for (i in 1:length(ind.list)) {
   
+  ind.list
   ind.ar <- allelicrichness(as.loci(ind.list[[i]]), pop = as.loci(ind.list[[i]])$population, method = "rarefaction")
   cat(ind.names[[i]], "\n")
   m.ar <- apply(ind.ar, 1, mean)
@@ -56,7 +57,8 @@ ar.div <- bind_rows(ar.list) %>%
                            year == "All Yrs - Indiv x Year" ~ "All_Pops",
                            year == "2014" ~ "2014",
                            year == "2019" ~ "2019",
-                           year == "2021" ~ "2021")) %>%
+                           year == "2021" ~ "2021",
+                           T ~ year)) %>%
   arrange(pop, group) %>%
   relocate(pop, group) %>% select(-year)
 
@@ -90,7 +92,7 @@ p.ar <- ggplot(data = ar.div %>% filter(!group %in% c("All_Yrs", "All_Pops")), a
   theme(title = element_blank(),
         legend.position = "right") +
   guides(color = guide_legend(title = "Pond"))
-# p.ar
+p.ar
 ggsave(filename = paste0(PATH, "/figures/delta_allelicrichness_legend.png"), plot = p.ar, width = 3, height = 5.45)
 ```
 <!-- \begin{figure}[!h] -->

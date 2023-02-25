@@ -425,9 +425,11 @@ write.table(microsat, file=paste0(PATH,"/Ne_Estimator/Ne_loci_original_nosibs.tx
 
 
 # STRUCTURE prep ----
-library(adegenet)
+library(adegenet); library(tidyverse)
+PATH <- "/home/chloe9mo/Documents/Projects/temporal_aztreefrog"
 
-aztf <- read.csv(paste0(PATH,"/microsat_data/final_aztf_loci_nosibs.csv"))
+# aztf <- read.csv(paste0(PATH,"/microsat_data/final_aztf_loci_nosibs.csv"))
+source(file = paste0(PATH, "/code/01c_DataLoad.R"))
 pop.key <- aztf %>% select(year_pop) %>% distinct() %>% mutate(group = row_number())
 # write.csv(pop.key, file = paste0(PATH, "/microsat_data/year_pop_number_key4structure.csv"), row.names = F)
 

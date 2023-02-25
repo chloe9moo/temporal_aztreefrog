@@ -69,7 +69,7 @@ for (i in 1:length(ind.list)) {
   write.csv(daz.pw_G, file = paste0(PATH, "/results_tables/", ind.names[[i]], "_pairwiseGst.csv"))
   
   #mantel test
-  ibd.s <- vegan::mantel(az.pw_G, pop_dist, method = "pearson", 999)
+  ibd.s <- vegan::mantel(az.pw_G, pop_dist, method = "pearson", 10000)
   IBD[IBD$group == ind.names[[i]], "mantel.r_euc"] <- ibd.s$statistic
   IBD[IBD$group == ind.names[[i]], "p.val_euc"] <- ibd.s$signif
   
@@ -82,7 +82,7 @@ for (i in 1:length(ind.list)) {
     st.d2 <- log(st.d2)
     
     #mantel test
-    ibd.str <- vegan::mantel(az.pw_G, st.d2, method = "pearson", 999)
+    ibd.str <- vegan::mantel(az.pw_G, st.d2, method = "pearson", 10000)
     IBD[IBD$group == ind.names[[i]], "mantel.r_str"] <- ibd.str$statistic
     IBD[IBD$group == ind.names[[i]], "p.val_str"] <- ibd.str$signif
     }
@@ -93,7 +93,7 @@ IBD
 write.csv(IBD, file = paste0(PATH, "/results_tables/IBD_Gst_LogDist.csv"), row.names = F)
 
 #plot to check IBD patterns
-dist_plot_gst <- function(genind.obj, title, gen.transform = T, geo.tranform = F) {
+dist_plot_gst <- function(genind.obj, title, gen.transform = T, geo.tranform = T) {
   # genind.obj = genind object with xy info
   # gen.measure is metric to use, can be fst, gst, or dps
   # title, is title to put on the plot
@@ -155,13 +155,15 @@ for (i in 1:length(fst_l)) {
   
   pw.f <- fst_l[[i]] %>% 
     column_to_rownames(var = "X") %>%
-    rename_with(.cols = everything(), ~ gsub("X", "", .x)) %>% as.dist()
+    rename_with(.cols = everything(), ~ gsub("X", "", .x)) %>%
+    mutate(across(everything(), ~ (.x / (1 - .x)))) %>% #linearized!!
+    as.dist()
   pop_dist <- dist(ind.list[[i]]@other$xy, method="euclidean")
 #if log transforming distance
   pop_dist <- log(pop_dist)
   
   #mantel test
-  ibd.s <- vegan::mantel(pw.f, pop_dist, method = "pearson", 999)
+  ibd.s <- vegan::mantel(pw.f, pop_dist, method = "pearson", 10000)
   IBD.f[IBD.f$group == ind.names[[i]], "mantel.r_euc"] <- ibd.s$statistic
   IBD.f[IBD.f$group == ind.names[[i]], "p.val_euc"] <- ibd.s$signif
   
@@ -175,7 +177,7 @@ for (i in 1:length(fst_l)) {
     st.d2 <- log(st.d2)
     
     #mantel test
-    IBD.f.str <- vegan::mantel(pw.f, st.d2, method = "pearson", 999)
+    IBD.f.str <- vegan::mantel(pw.f, st.d2, method = "pearson", 10000)
     IBD.f[IBD.f$group == ind.names[[i]], "mantel.r_str"] <- IBD.f.str$statistic
     IBD.f[IBD.f$group == ind.names[[i]], "p.val_str"] <- IBD.f.str$signif
   }
@@ -203,7 +205,7 @@ for (i in 1:length(Dps_l)) {
   pop_dist <- log(pop_dist)
   
   #mantel test
-  ibd.s <- vegan::mantel(pw.d, pop_dist, method = "pearson", 999)
+  ibd.s <- vegan::mantel(pw.d, pop_dist, method = "pearson", 10000)
   IBD.d[IBD.d$group == ind.names[[i]], "mantel.r_euc"] <- ibd.s$statistic
   IBD.d[IBD.d$group == ind.names[[i]], "p.val_euc"] <- ibd.s$signif
   
@@ -217,7 +219,7 @@ for (i in 1:length(Dps_l)) {
     st.d2 <- log(st.d2)
     
     #mantel test
-    IBD.d.str <- vegan::mantel(pw.d, st.d2, method = "pearson", 999)
+    IBD.d.str <- vegan::mantel(pw.d, st.d2, method = "pearson", 10000)
     IBD.d[IBD.d$group == ind.names[[i]], "mantel.r_str"] <- IBD.d.str$statistic
     IBD.d[IBD.d$group == ind.names[[i]], "p.val_str"] <- IBD.d.str$signif
   }
@@ -229,7 +231,7 @@ IBD.d #looks like 2019 is the only one where IBD is a feasible model
 write.csv(IBD.d, file = paste0(PATH, "/results_tables/IBD_Dps_LogDist.csv"), row.names = F)
 
 #+ plot IBD ----
-dist_plot <- function(genind.obj, obj.name, gen.measure, gen.transform = F, geo.tranform = F) {
+dist_plot <- function(genind.obj, obj.name, gen.measure, gen.transform = T, geo.tranform = T) {
   # genind.obj = genind object with xy info
   # obj.name = must grab from same part of genind.obj to match files
   # gen.measure is metric to use, can be fst, gst, or dps
@@ -268,21 +270,158 @@ dist_plot <- function(genind.obj, obj.name, gen.measure, gen.transform = F, geo.
                     contour = FALSE,
                     show.legend = FALSE) +
     geom_point() +
-    geom_smooth(method = "lm", formula = y~x, se = F, color="black", size=0.5) +
-    geom_smooth(method = "loess", formula = y~x, se = F, color="red", size=0.5) +
+    geom_smooth(method = "lm", formula = y~x, se = F, color="black", linewidth=0.5) +
+    geom_smooth(method = "loess", formula = y~x, se = F, color="red", linewidth=0.5) +
     scale_fill_viridis_c() +
     labs(x=x_title, y=y_title, title = all.title) +
     theme_minimal()
   return(p)
 }
 
-dist_plot(ind.list[[3]], ind.names[[3]], "Dps")
+dist_plot(ind.list[[3]], ind.names[[3]], "Dps", gen.transform = F)
 ggsave(filename = paste0(PATH, "/figures/IBD_Dps_2014.png"), plot = last_plot(), width = 6, height = 6, bg = "white")
-dist_plot(ind.list[[4]], ind.names[[4]], "Dps")
+dist_plot(ind.list[[4]], ind.names[[4]], "Dps", gen.transform = F)
 ggsave(filename = paste0(PATH, "/figures/IBD_Dps_2019.png"), plot = last_plot(), width = 6, height = 6, bg = "white")
-dist_plot(ind.list[[5]], ind.names[[5]], "Dps")
+dist_plot(ind.list[[5]], ind.names[[5]], "Dps", gen.transform = F)
 ggsave(filename = paste0(PATH, "/figures/IBD_Dps_2021.png"), plot = last_plot(), width = 6, height = 6, bg = "white")
 
 #GLMs ----
+library(ecodist) #note! if incorrect number of dimensions error occurs, try restarting R and only loading tidyverse and ecodist
+##IBD + IBSD ----
+metric <- "Dps"
+IBD.mnm <- data.frame(group = unlist(ind.names), 
+                      lin_coef = NA, lin_p.val = NA, lin_inter = NA, 
+                      log_coef = NA, log_p.val = NA, log_inter = NA)
+for (i in 1:length(ind.names)) {
+  
+  if (i %in% c(2, 6)) { next }
+  if (metric == "Fst") { ind.names[[i]] <- gsub(" ", "_", ind.names[[i]]) }
+  daz.pw_G <- read.csv(paste0(PATH, "/results_tables/", ind.names[[i]], "_pairwise", metric, ".csv")) %>% 
+    column_to_rownames(var = "X") %>%
+    rename_with(.cols = everything(), ~ gsub("X", "", .x)) %>%
+    as.dist()
+  pop_dist <- dist(ind.list[[i]]@other$xy, method="euclidean")
+  
+  mrm.lin <- MRM(daz.pw_G ~ log(pop_dist), nperm = 10000, method = "linear")
+  mrm.log <- MRM(daz.pw_G ~ log(pop_dist), nperm = 10000, method = "logistic")
 
+  IBD.mnm[IBD.mnm$group == ind.names[[i]], "lin_coef"] <- mrm.lin$coef[2,1]
+  IBD.mnm[IBD.mnm$group == ind.names[[i]], "lin_p.val"] <- mrm.lin$coef[2,2]
+  IBD.mnm[IBD.mnm$group == ind.names[[i]], "lin_inter"] <- mrm.lin$coef[1,1]
+  IBD.mnm[IBD.mnm$group == ind.names[[i]], "log_coef"] <- mrm.log$coef[2,1]
+  IBD.mnm[IBD.mnm$group == ind.names[[i]], "log_p.val"] <- mrm.log$coef[2,2]
+  IBD.mnm[IBD.mnm$group == ind.names[[i]], "log_inter"] <- mrm.log$coef[1,1]
+  cat(ind.names[[i]], "finished\n")
 
+}
+IBSD.mnm <- data.frame(group = unlist(ind.names), 
+                       lin_coef = NA, lin_p.val = NA, lin_inter = NA, 
+                       log_coef = NA, log_p.val = NA, log_inter = NA)
+for (i in 1:length(ind.names)) {
+  
+  if (i %in% c(2, 6)) { next }
+  if (metric == "Fst") { ind.names[[i]] <- gsub(" ", "_", ind.names[[i]]) }
+  daz.pw_G <- read.csv(paste0(PATH, "/results_tables/", ind.names[[i]], "_pairwise", metric, ".csv")) %>% 
+    column_to_rownames(var = "X") %>%
+    rename_with(.cols = everything(), ~ gsub("X", "", .x))
+  pop_dist <- st.d %>% dplyr::select(names(daz.pw_G)) %>% filter(row.names(st.d) %in% names(daz.pw_G)) %>% as.dist()
+  daz.pw_G <- as.dist(daz.pw_G)
+  
+  mrm.lin <- MRM(daz.pw_G ~ log(pop_dist), nperm = 10000, method = "linear")
+  mrm.log <- MRM(daz.pw_G ~ log(pop_dist), nperm = 10000, method = "logistic")
+  
+  IBSD.mnm[IBSD.mnm$group == ind.names[[i]], "lin_coef"] <- mrm.lin$coef[2,1]
+  IBSD.mnm[IBSD.mnm$group == ind.names[[i]], "lin_p.val"] <- mrm.lin$coef[2,2]
+  IBSD.mnm[IBSD.mnm$group == ind.names[[i]], "lin_inter"] <- mrm.lin$coef[1,1]
+  IBSD.mnm[IBSD.mnm$group == ind.names[[i]], "log_coef"] <- mrm.log$coef[2,1]
+  IBSD.mnm[IBSD.mnm$group == ind.names[[i]], "log_p.val"] <- mrm.log$coef[2,2]
+  IBSD.mnm[IBSD.mnm$group == ind.names[[i]], "log_inter"] <- mrm.log$coef[1,1]
+  cat(ind.names[[i]], "finished\n")
+  
+}
+
+write.csv(IBD.mnm, file = paste0(PATH, "/results_tables/IBD_", metric, "_LogDist_MRM.csv"), row.names = F)
+write.csv(IBSD.mnm, file = paste0(PATH, "/results_tables/IBSD_", metric, "_LogDist_MRM.csv"), row.names = F)
+if (metric == "Fst") {ind.names <- list("All Yrs - Indiv x Pop", "All Yrs - Indiv x Year", "Indiv 2014", "Indiv 2019", "Indiv 2021")}
+
+# ENV comps ----
+## diversity vs. env ----
+div <- read.csv(paste0(PATH, "/results_tables/Table1_SummaryTable.csv"))
+precip <- read.csv(paste0(PATH, "/spatial_data/Precip4Sites.csv")) %>%
+  filter(!pop %in% c(2, 5, 11, 12, 13, 14, 15)) %>%
+  mutate(pop = case_when(pop == "1" ~ 1,
+                         pop == "4" ~ 2,
+                         pop == "3" ~ 3,
+                         pop == "6" ~ 4, 
+                         pop == "7" ~ 5, 
+                         pop == "8" ~ 6, 
+                         pop == "9" ~ 7, 
+                         pop == "10" ~ 8, 
+                         pop == "16" ~ 9, 
+                         T ~ 100),
+         year = gsub("_[0-9]*$", "", year_pop),
+         year = ifelse(year == 2015, 2014, year),
+         year_pop = paste0(year, "_", pop)) %>%
+  relocate(pop, year, year_pop) 
+precip.mod <- precip %>%
+  mutate(ppt_2yr = case_when(year == 2014 ~ ppt_2012,
+                             year == 2019 ~ ppt_2017,
+                             year == 2021 ~ ppt_2019),
+         ppt_1yr = case_when(year == 2014 ~ ppt_2013,
+                             year == 2019 ~ ppt_2018,
+                             year == 2021 ~ ppt_2020),
+         d_all = case_when(year == 2014 ~ d14,
+                           year == 2019 ~ d19,
+                           year == 2021 ~ d21),
+         year = as.integer(year)) %>%
+  select(pop, year, year_pop, ppt_2yr, ppt_1yr, d_all) %>%
+  arrange(pop, year) %>%
+  left_join(., div)
+
+library(lme4); library(AICcmodavg)
+
+cor.test(precip.mod$N_final, precip.mod$m.ar, method = "pearson")
+precip.mod %>%
+  mutate(year = as.factor(as.numeric(year)),
+         pop = as.factor(as.numeric(pop))) %>%
+  select(year, pop, N_final, H_obs, H_exp, Ne, m.ar, contains("ppt"), d_all) %>%
+  mutate(across(!c(year, pop), as.numeric)) %>%
+  pivot_longer(cols = c(N_final, H_obs, H_exp, Ne, m.ar), names_to = "metric", values_to = "value") %>%
+  ggplot() +
+  # geom_boxplot(aes(x=year, y=ppt_2yr))
+  geom_point(aes(x=ppt_2yr, y=value, shape = year, color = pop), size=2) +
+  facet_wrap(vars(metric), scales = "free") +
+  scale_color_manual(values = aztf.pal) +
+  theme_bw()
+ggsave(paste0(PATH, "/figures/Precip_DivMetrics.png"), plot=last_plot(), width = 7, height = 6)
+
+precip.mod <- precip.mod %>%
+  mutate(year = as.factor(as.numeric(year)),
+         pop = as.factor(as.numeric(pop))) %>%
+  select(year, pop, N_final, H_obs, H_exp, Ne, m.ar, contains("ppt"), d_all) 
+div_list <- c("N_final", "H_obs", "H_exp", "Ne", "m.ar")
+
+precip_test <-  function(metric_test) {
+  p_run <- precip.mod %>% 
+    select(year, pop, contains("ppt"), d_all, contains(metric_test))
+  names(p_run)[6] <- "div"
+  p_run <- p_run %>% mutate(div = as.numeric(div))
+  
+  mod1 <- lmer(div ~ ppt_1yr + (1|pop) + (1|year), data = p_run, REML = F)
+  mod2 <- lmer(div ~ ppt_2yr + (1|pop) + (1|year), data = p_run, REML = F)
+  mod3 <- lmer(div ~ ppt_1yr + ppt_2yr + (1|pop) + (1|year), data = p_run, REML = F)
+  mod4 <- lmer(div ~ d_all + (1|pop) + (1|year), data = p_run, REML = F)
+  mod.null <- lmer(div ~ (1|pop) + (1|year), data = p_run, REML = F)
+  mod.glob <- lmer(div ~ ppt_1yr + ppt_2yr + d_all + (1|pop) + (1|year), data = p_run, REML = F)
+  
+  mod.list <- list(mod1, mod2, mod3, mod4, mod.null, mod.glob)
+  mod.list <- aictab(mod.list, modnames = c("ppt_1yr", "ppt_2yr", "ppt_1yr + ppt_2yr", "stdev_ppt", "null", "global")) %>%
+    as.data.frame() %>%
+    mutate(Div_Var = metric_test) %>%
+    relocate(Div_Var)
+  return(mod.list)
+}
+
+all.models <- lapply(div_list, precip_test)
+all.models <- bind_rows(all.models)
+write.csv(all.models, paste0(PATH, "/results_tables/LME_div_precip_aic.csv"), row.names = F)

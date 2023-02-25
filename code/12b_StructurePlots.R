@@ -8,12 +8,8 @@ library(tidyverse); library(ggh4x) #; library(adegenet); library(paletteer); lib
 PATH <- "/home/chloe9mo/Documents/Projects/temporal_aztreefrog"
 
 ## load data
-# source(file = paste0(PATH, "/code/01c_DataLoad.R"))
-pop.key <- read.csv(paste0(PATH, "/microsat_data/year_pop_number_key4structure.csv"))
-
-aztf <- read.csv(paste0(PATH, "/microsat_data/final_aztf_loci_nosibs.csv"))
-aztf <- aztf %>% mutate(year = ifelse(year == 2018, 2019, year)) %>%
-  mutate(year = ifelse(year == 2015, 2014, year))
+source(file = paste0(PATH, "/code/01c_DataLoad.R"))
+pop.key <- read.csv(paste0(PATH, "/microsat_data/structure_files/year_pop_number_key4structure.csv"))
 
 ## delta K function
 #modified from STRUCTURE HARVESTER python script (https://taylor0.biology.ucla.edu/structureHarvester/faq.html)
@@ -190,6 +186,7 @@ str_out %>% filter(K == maxK) %>% slice_max(MeanLnP_K, n=1) #selecting which rep
 clust <- read.delim(paste0(PATH, "/structure_results/K24/inferred_ancestry.csv"), header = F, sep = ",")
 clust <- set_cluster_df(clust)
 write.csv(clust, file=paste0(PATH, "/structure_results/AllInd_dK2_clusterassignments.csv"), row.names = F)
+# clust <- read.csv(paste0(PATH, "/structure_results/AllInd_dK2_clusterassignments.csv"))
 
 ##+ make ggplot ----
 group.colors <- c("#12263A", "#F4D1AE")
