@@ -1,13 +1,13 @@
 #!/bin/bash
-#4 OCT 2022
+#27 FEB 2023
 #CE Moore
 #script to take STRUCTURE output files and make a csv to bring into R
 
 #set up
 cd ~/Documents/Projects/temporal_aztreefrog/structure_results
 tK=2   #set the most likely K calculated previously
-tR=3  #set the rep from highest likelihood across reps
-RUN_FOLDER='r2021/r6789' #set the run to pull from (basically the folder name)
+tR=4  #set the rep from highest likelihood across reps
+RUN_FOLDER='K24' #set the run to pull from (basically the folder name)
 
 OUT_FILE=./${RUN_FOLDER}/Output_Files/Year_Pop_K${tK}_r${tR}_f
 

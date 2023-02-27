@@ -9,7 +9,7 @@ PATH <- "/home/chloe9mo/Documents/Projects/temporal_aztreefrog"
 
 ## load data
 source(file = paste0(PATH, "/code/01c_DataLoad.R"))
-pop.key <- read.csv(paste0(PATH, "/microsat_data/structure_files/year_pop_number_key4structure.csv"))
+# pop.key <- read.csv(paste0(PATH, "/microsat_data/structure_files/year_pop_number_key4structure.csv"))
 
 ## delta K function
 #modified from STRUCTURE HARVESTER python script (https://taylor0.biology.ucla.edu/structureHarvester/faq.html)
@@ -75,8 +75,12 @@ set_cluster_df <- function(x, subset = 'all') {
 }
 
 structure_plot_it <- function(cluster.assignments, color.assignments, plot.title, n.yrs = FALSE, cluster.relevel = NULL) {
-
-#cluster.assignments should be the inferred ancestry csv already gone through set_cluster_df
+#cluster.assignments: should be the inferred ancestry csv already gone through set_cluster_df
+#color.assignments: set which colors to have in structure plot, must equal number of clusters 
+#plot.title: set plot title
+#n.yrs: if TRUE, all of the years are included (adds the year under or over pops in the plot). if false, does not show a year label
+#cluster.relevel: can specify how to order clusters, in case numerical order isn't wanted
+  
   if(!all(c("ID", "year", "pop", "clust1", "Label") %in% colnames(cluster.assignments))) {
     stop("Dataframe needs 'ID', 'year', 'pop', 'Label', and at least one 'clust' column.")
   }
@@ -107,7 +111,7 @@ structure_plot_it <- function(cluster.assignments, color.assignments, plot.title
   
 #prep graphics
   facetstrips <- strip_nested(
-    text_x = elem_list_text(size = c(12, 6)),
+    text_x = elem_list_text(size = c(12, 10)),
     by_layer_x = TRUE, clip = "off"
   )
   
@@ -117,10 +121,10 @@ structure_plot_it <- function(cluster.assignments, color.assignments, plot.title
       facet_nested(~ yearfact+pondfact,
                    #~ pondfact+yearfact, #switch which is on top or bottom in the fig
                    switch = "x",
-                   nest_line = element_line(size = 1, lineend = "round"),
+                   nest_line = element_line(linewidth = 1, lineend = "round"),
                    scales = "free", space = "free", strip = facetstrips),
       #theme_minimal(),
-      labs(x = "", y = "membership probability"),
+      labs(x = "", y = ""),
       scale_y_continuous(expand = c(0, 0)),
       scale_x_discrete(expand = expansion(add = 0.5)),
       scale_fill_manual(values = group.colors),
@@ -132,6 +136,7 @@ structure_plot_it <- function(cluster.assignments, color.assignments, plot.title
         #plot.background   = element_blank(),
         panel.spacing.x = unit(0.18, "lines"),
         axis.text.x = element_blank(),
+        axis.text.y = element_text(size = 10),
         panel.grid = element_blank(),
         legend.position = "none"
       ))
@@ -140,10 +145,10 @@ structure_plot_it <- function(cluster.assignments, color.assignments, plot.title
       geom_col(size = 0.01, width = 1),
       facet_nested(~ pondfact,
                    switch = "x",
-                   nest_line = element_line(size = 1, lineend = "round"),
+                   nest_line = element_line(linewidth = 1, lineend = "round"),
                    scales = "free", space = "free", strip = facetstrips),
       #theme_minimal(),
-      labs(x = "", y = "membership probability"),
+      labs(x = "", y = ""),
       scale_y_continuous(expand = c(0, 0)),
       scale_x_discrete(expand = expansion(add = 0.5)),
       scale_fill_manual(values = group.colors),
@@ -155,6 +160,7 @@ structure_plot_it <- function(cluster.assignments, color.assignments, plot.title
         #plot.background   = element_blank(),
         panel.spacing.x = unit(0.18, "lines"),
         axis.text.x = element_blank(),
+        axis.text.y = element_text(size = 10),
         panel.grid = element_blank(),
         legend.position = "none"
       ))
@@ -162,9 +168,9 @@ structure_plot_it <- function(cluster.assignments, color.assignments, plot.title
   
   #plot
   p <- ggplot(long.clust, aes(factor(ID), prob, fill = cluster)) +
-    graphic.list +
-    ggtitle( paste0( plot.title, "; K = ", length(unique(long.clust$cluster)) ) )
-  
+    graphic.list #+
+    #ggtitle( paste0( plot.title, "; K = ", length(unique(long.clust$cluster)) ) )
+  # p
   return(p)
 }
 
@@ -193,6 +199,12 @@ group.colors <- c("#12263A", "#F4D1AE")
 p.all <- structure_plot_it(clust, group.colors, "All years, All pops", n.yrs = T)
 ggsave(paste0(PATH, "/structure_results/figures/pop_on_year_strct.png"), plot = p.all, width = 10, height = 6)
 
+p14 <- structure_plot_it(clust %>% filter(year == 2014), group.colors, "", n.yrs = T)
+p19 <- structure_plot_it(clust %>% filter(year == 2019), group.colors, "", n.yrs = T)
+p21 <- structure_plot_it(clust %>% filter(year == 2021), group.colors, "", n.yrs = T)
+
+cowplot::plot_grid(p14, p19, p21, align = "v", axis = "l", ncol=1)
+ggsave(paste0(PATH, "/structure_results/figures/pop_on_year_strct_stacked.png"), width = 6, height = 10)
 # ggsave(paste0(PATH, "/structure_results/figures/year_on_pop_strct.png"), plot = last_plot(), width = 10, height = 6)
 
 #2014 ----
