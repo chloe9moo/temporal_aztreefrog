@@ -54,14 +54,13 @@ st.d <- read.csv(paste0(PATH, "/results_tables/RiverDist_Matrix.csv")) %>%
 
 
 ##+ GST ----
-
 IBD <- data.frame(group = unlist(ind.names), mantel.r_euc = NA, p.val_euc = NA, mantel.r_str = NA, p.val_str = NA)
 for (i in 1:length(ind.list)) {
-  
   ##euc distance
   #pairwise distance - gst and spatially
   # pop_dist <- dist(ind.list[[i]]@other$xy, method="euclidean")
   pop_dist <- log(dist(ind.list[[i]]@other$xy, method="euclidean"))
+
   az.pw_G <- pairwise_Gst_Hedrick(ind.list[[i]], linearized = TRUE) #linearized = Gst / (1-Gst)
   
   daz.pw_G <- round(as.data.frame(as.matrix(az.pw_G)),3)

@@ -395,6 +395,11 @@ write.csv(aztf.s, file=paste0(PATH, "/microsat_data/combined_aztf_loci_nosibs.cs
 # aztf.s %>% filter(year == '2015' & !ID %in% mims$ID) %>% select(ID) #samples I kept, Meryl didn't
 # mims %>% filter(!ID %in% aztf.s$ID)
 
+# calculate life history values ----
+atraiu <- read_csv("/home/chloe9mo/Documents/Projects/anuran_biodiversity/TraitData/ATraiU_summary_values_2020AUG.csv")
+atraiu <- atraiu %>% filter(family == "Hylidae")
+atraiu %>% group_by(family) %>% summarise(across(where(is.numeric), ~mean(.x, na.rm = T))) %>% View()
+
 # NeEstimator prep ----
 library(adegenet)
 # aztf <- read.csv(paste0(PATH,"/microsat_data/final_aztf_loci_sibs.csv"))
@@ -451,6 +456,90 @@ names(str) <- gsub("\\.2", "", names(str))
 str[str=="NA"] <- -1
 
 write.table(str, file=paste0(PATH,"/microsat_data/structure_loci.txt"), sep = '\t', row.names = F, quote = F)
+
+#+split all ----
+##++ 123489 ----
+str <- aztf %>% left_join(., pop.key) %>%
+  filter(pop %in% c(1, 2, 3, 4, 8, 9)) %>%
+  select(-pop, -year, -age) %>%
+  mutate(Label = row_number()) %>%
+  relocate(ID, Label, group) %>% 
+  select(-year_pop)
+str %>% select(ID, Label) %>% write.csv(., file=paste0(PATH, "/microsat_data/ind_key4structure_123489.csv"), row.names = F)
+str <- str %>% select(-ID)
+
+ind_aztf_pop <- df2genind(str[,c(3:19)], sep = "/", ind.names = str$Label, NA.char = "-1/-1")
+ind_aztf_pop@pop <- as.factor(str$group) #assign populations
+str <- genind2df(ind_aztf_pop, sep = "/", usepop = T, oneColPerAll = T)
+str <- str %>% mutate(Label = row.names(str), Pop = pop) %>% select(-pop) %>% relocate(Label, Pop)
+# str <- str %>% select(-Label)
+names(str) <- gsub("\\.1", "", names(str))
+names(str) <- gsub("\\.2", "", names(str))
+str[str=="NA"] <- -1
+
+write.table(str, file=paste0(PATH,"/microsat_data/structure_loci_123489.txt"), sep = '\t', row.names = F, quote = F)
+##++ 45678 ----
+str <- aztf %>% left_join(., pop.key) %>%
+  filter(pop %in% c(4, 5, 6, 7, 8)) %>%
+  select(-pop, -year, -age) %>%
+  mutate(Label = row_number()) %>%
+  relocate(ID, Label, group) %>% 
+  select(-year_pop)
+str %>% select(ID, Label) %>% write.csv(., file=paste0(PATH, "/microsat_data/ind_key4structure_45678.csv"), row.names = F)
+str <- str %>% select(-ID)
+
+ind_aztf_pop <- df2genind(str[,c(3:19)], sep = "/", ind.names = str$Label, NA.char = "-1/-1")
+ind_aztf_pop@pop <- as.factor(str$group) #assign populations
+str <- genind2df(ind_aztf_pop, sep = "/", usepop = T, oneColPerAll = T)
+str <- str %>% mutate(Label = row.names(str), Pop = pop) %>% select(-pop) %>% relocate(Label, Pop)
+# str <- str %>% select(-Label)
+names(str) <- gsub("\\.1", "", names(str))
+names(str) <- gsub("\\.2", "", names(str))
+str[str=="NA"] <- -1
+
+write.table(str, file=paste0(PATH,"/microsat_data/structure_loci_45678.txt"), sep = '\t', row.names = F, quote = F)
+
+##+ 4568 ----
+str <- aztf %>% left_join(., pop.key) %>%
+  filter(pop %in% c(4, 5, 6, 8)) %>%
+  select(-pop, -year, -age) %>%
+  mutate(Label = row_number()) %>%
+  relocate(ID, Label, group) %>% 
+  select(-year_pop)
+str %>% select(ID, Label) %>% write.csv(., file=paste0(PATH, "/microsat_data/ind_key4structure_4568.csv"), row.names = F)
+str <- str %>% select(-ID)
+
+ind_aztf_pop <- df2genind(str[,c(3:19)], sep = "/", ind.names = str$Label, NA.char = "-1/-1")
+ind_aztf_pop@pop <- as.factor(str$group) #assign populations
+str <- genind2df(ind_aztf_pop, sep = "/", usepop = T, oneColPerAll = T)
+str <- str %>% mutate(Label = row.names(str), Pop = pop) %>% select(-pop) %>% relocate(Label, Pop)
+# str <- str %>% select(-Label)
+names(str) <- gsub("\\.1", "", names(str))
+names(str) <- gsub("\\.2", "", names(str))
+str[str=="NA"] <- -1
+
+write.table(str, file=paste0(PATH,"/microsat_data/structure_loci_4568.txt"), sep = '\t', row.names = F, quote = F)
+
+##+ 1234 ----
+str <- aztf %>% left_join(., pop.key) %>%
+  filter(pop %in% c(1,2,3,4)) %>%
+  select(-pop, -year, -age) %>%
+  mutate(Label = row_number()) %>%
+  relocate(ID, Label, group) %>% 
+  select(-year_pop)
+str %>% select(ID, Label) %>% write.csv(., file=paste0(PATH, "/microsat_data/ind_key4structure_1234.csv"), row.names = F)
+str <- str %>% select(-ID)
+
+ind_aztf_pop <- df2genind(str[,c(3:19)], sep = "/", ind.names = str$Label, NA.char = "-1/-1")
+ind_aztf_pop@pop <- as.factor(str$group) #assign populations
+str <- genind2df(ind_aztf_pop, sep = "/", usepop = T, oneColPerAll = T)
+str <- str %>% mutate(Label = row.names(str), Pop = pop) %>% select(-pop) %>% relocate(Label, Pop)
+# str <- str %>% select(-Label)
+names(str) <- gsub("\\.1", "", names(str))
+names(str) <- gsub("\\.2", "", names(str))
+str[str=="NA"] <- -1
+
+write.table(str, file=paste0(PATH,"/microsat_data/structure_loci_1234.txt"), sep = '\t', row.names = F, quote = F)
 
 #2. all samples split into years ----
 #+ 2015 ----

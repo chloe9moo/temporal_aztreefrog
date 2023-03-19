@@ -234,6 +234,7 @@ pw <- pw %>%
   arrange(factor(group, levels = names(pw))) %>%
   column_to_rownames("group")
 write.csv(pw, file = paste0(PATH, "/results_tables/", gsub(" ", "_", ind.names[[6]]), "_pairwiseFst.csv"), row.names = T)
+
 pw <- read.csv(paste0(PATH, "/results_tables/Year_Pop_pairwiseFst.csv"))
 pw.long <- pw %>%
   pivot_longer(cols = starts_with("X2"), names_to = "X2", values_to = "pFst") %>%
@@ -274,35 +275,62 @@ ggsave(filename = paste0(PATH, "/figures/pairwiseFst_heatmap_comp.png"), plot = 
 
 ```{r temp fst boxplot, message=F, eval=F}
 #filter all rows that match for population
+pw <- read.csv(paste0(PATH, "/results_tables/Year_Pop_pairwiseFst.csv")) %>%
+  column_to_rownames("X")
+pw[upper.tri(pw)] <- NA
+pw <- pw %>% 
+  rownames_to_column("X") %>%
+  rename_with(.cols = starts_with("X2"), .fn = ~ gsub("X", "", .x)) %>%
+  relocate('X', '2014_1', '2021_1',
+           '2014_3', '2021_3',
+           '2014_2', '2019_2', '2021_2',
+           '2014_4', '2019_4', '2021_4',
+           '2014_5', '2019_5', '2021_5',
+           '2014_6', '2019_6', '2021_6',
+           '2014_7', '2019_7', '2021_7',
+           '2014_8', '2021_8',
+           '2019_9', '2021_9')
+pw.long <- pw %>%
+  mutate(X = fct_relevel(factor(X), gsub("X", "", names(pw[,-1])))) %>%
+  pivot_longer(cols = starts_with("20"), names_to = "X2", values_to = "pGst") %>%
+  filter(!is.na(pGst)) %>%
+  mutate(X2 = gsub("X", "", X2)) %>%
+  mutate(X2 = fct_relevel(factor(X2), gsub("X", "", names(pw[,-1])))) %>%
+  filter(X != X2)
+
 pw.box <- pw.long %>% 
   mutate(pop1 = gsub("^[0-9]{4}_", "", X), 
          pop2 = gsub("^[0-9]{4}_", "", X2),
          year1 = as.numeric(gsub("_[0-9]*$", "", X)), 
-         year2 = as.numeric(gsub("_[0-9]*$", "", X2))) %>% #pull out pops + year
-  filter(!is.na(pFst_ul))
-  
+         year2 = as.numeric(gsub("_[0-9]*$", "", X2))) #pull out pops + year
 pw.box <- pw.box %>%
   mutate(group = case_when( 
-    pop1 == pop2 & year1 - year2 > 0 ~ "Pop A vs Pop A \nin previous years", #pop with itself in t-1 or t-2
-    pop1 != pop2 & year1 - year2 > 0 ~ "Pop A vs all other pops \nin previous years", #pop with other pops in t-1 or t-2
-    pop1 != pop2 & year1 == year2 ~ "Pop A vs all other pops \nin same year",
+    pop1 == pop2 & year1 - year2 > 0 ~ "Pop X vs Pop X\nin previous\nsample periods", #pop with itself in t-1 or t-2
+    pop1 == pop2 & year2 - year1 > 0 ~ "Pop X vs Pop X\nin previous\nsample periods",
+    pop1 != pop2 & year1 - year2 > 0 ~ "Pop X vs all other pops\nin previous\nsample periods", #pop with other pops in t-1 or t-2
+    pop1 != pop2 & year2 - year1 > 0 ~ "Pop X vs all other pops\nin previous\nsample periods",
+    pop1 != pop2 & year1 == year2 ~ "Pop X vs all other pops\nin the same\nsample period",
     TRUE ~ "other"
   ))
+pw.box <- pw.box %>%
+  mutate(group = fct_relevel(as.factor(group), c("Pop X vs Pop X\nin previous\nsample periods", "Pop X vs all other pops\nin previous\nsample periods", "Pop X vs all other pops\nin the same\nsample period")))
 
-pfst.time <- ggplot(data = pw.box, aes(group, pFst)) +
-  gghalves::geom_half_boxplot(aes(fill=group), errorbar.length = 0.25, show.legend = F) +
+pfst.time <- ggplot(data = pw.box, aes(group, pGst)) +
+  gghalves::geom_half_boxplot(aes(fill=group), errorbar.length = 0.25, show.legend = F, outlier.shape = NA) +
   gghalves::geom_half_point(color="black", alpha = 0.6) +
-  scale_fill_manual(values = c("#00C6B8", "#12263A", "#F4D1AE")) +
+  scale_fill_manual(values = c("#F4D1AE","#12263A","#00C6B8")) +
   # geom_violin(draw_quantiles = TRUE, scale = "count") +
   labs(x="", y=bquote('pairwise' ~'F'[ST])) +
-  theme(plot.background = element_blank(),
+  theme(plot.background = element_rect(fill = "white"),
         panel.grid.major.y = element_line(color = "black", linetype = "dashed"),
         panel.grid.major.x = element_blank(),
         panel.grid.minor = element_blank(),
-        panel.background = element_blank(),
-        axis.line = element_line(color = "black"))
+        panel.background = element_rect(fill = "white"),
+        axis.line = element_line(color = "black"),
+        axis.text = element_text(color = "black", size = 12),
+        axis.title = element_text(size = 13))
 pfst.time
-ggsave(filename = paste0(PATH, "/figures/TemporalFst_Boxplot.png"), plot=pfst.time, width = 5, height = 6)
+ggsave(filename = paste0(PATH, "/figures/TemporalFst_Boxplot.png"), plot=pfst.time, width = 7, height = 6)
 ```
 \begin{figure}
 \centering
@@ -361,9 +389,13 @@ heat.dps
 ggsave(paste0(PATH, "/figures/pairwiseDps_heatmap_", ind.names[[6]], ".png"), plot = heat.dps) 
 
 #boxplot
-dps[upper.tri(dps)] <- NA
-pw <- as.data.frame(as.matrix(dps)) %>%
-  relocate('2014_1', '2021_1',
+pw <- read.csv(paste0(PATH, "/results_tables/Year_Pop_pairwiseDps.csv")) %>%
+  column_to_rownames("X")
+pw[upper.tri(pw)] <- NA
+pw <- pw %>% 
+  rownames_to_column("X") %>%
+  rename_with(.cols = starts_with("X2"), .fn = ~ gsub("X", "", .x)) %>%
+  relocate('X', '2014_1', '2021_1',
            '2014_3', '2021_3',
            '2014_2', '2019_2', '2021_2',
            '2014_4', '2019_4', '2021_4',
@@ -372,43 +404,47 @@ pw <- as.data.frame(as.matrix(dps)) %>%
            '2014_7', '2019_7', '2021_7',
            '2014_8', '2021_8',
            '2019_9', '2021_9')
-
 pw.long <- pw %>%
-  mutate(X = row.names(.)) %>%
-  mutate(X = fct_relevel(factor(X), gsub("X", "", names(pw)))) %>%
-  pivot_longer(cols = starts_with("20"), names_to = "X2", values_to = "Dps") %>%
-  filter(!is.na(Dps)) %>%
+  mutate(X = fct_relevel(factor(X), gsub("X", "", names(pw[,-1])))) %>%
+  pivot_longer(cols = starts_with("20"), names_to = "X2", values_to = "pGst") %>%
+  filter(!is.na(pGst)) %>%
   mutate(X2 = gsub("X", "", X2)) %>%
-  mutate(X2 = fct_relevel(factor(X2), gsub("X", "", names(pw)))) %>%
+  mutate(X2 = fct_relevel(factor(X2), gsub("X", "", names(pw[,-1])))) %>%
   filter(X != X2)
+
 pw.box <- pw.long %>% 
   mutate(pop1 = gsub("^[0-9]{4}_", "", X), 
          pop2 = gsub("^[0-9]{4}_", "", X2),
          year1 = as.numeric(gsub("_[0-9]*$", "", X)), 
          year2 = as.numeric(gsub("_[0-9]*$", "", X2))) #pull out pops + year
-  
 pw.box <- pw.box %>%
   mutate(group = case_when( 
-    pop1 == pop2 & year1 - year2 > 0 ~ "Pop A vs Pop A \nin previous years", #pop with itself in t-1 or t-2
-    pop1 != pop2 & year1 - year2 > 0 ~ "Pop A vs all other pops \nin previous years", #pop with other pops in t-1 or t-2
-    pop1 != pop2 & year1 == year2 ~ "Pop A vs all other pops \nin same year",
+    pop1 == pop2 & year1 - year2 > 0 ~ "Pop X vs Pop X\nin previous\nsample periods", #pop with itself in t-1 or t-2
+    pop1 == pop2 & year2 - year1 > 0 ~ "Pop X vs Pop X\nin previous\nsample periods",
+    pop1 != pop2 & year1 - year2 > 0 ~ "Pop X vs all other pops\nin previous\nsample periods", #pop with other pops in t-1 or t-2
+    pop1 != pop2 & year2 - year1 > 0 ~ "Pop X vs all other pops\nin previous\nsample periods",
+    pop1 != pop2 & year1 == year2 ~ "Pop X vs all other pops\nin the same\nsample period",
     TRUE ~ "other"
   ))
+pw.box <- pw.box %>%
+  mutate(group = fct_relevel(as.factor(group), c("Pop X vs Pop X\nin previous\nsample periods", "Pop X vs all other pops\nin previous\nsample periods", "Pop X vs all other pops\nin the same\nsample period")))
 
-dps.time <- ggplot(data = pw.box, aes(group, Dps)) +
+dps.time <- ggplot(data = pw.box, aes(group, pGst)) +
   gghalves::geom_half_boxplot(aes(fill=group), errorbar.length = 0.25, show.legend = F, outlier.shape = NA) +
   gghalves::geom_half_point(color="black", alpha = 0.6) +
-  scale_fill_manual(values = c("#00C6B8", "#12263A", "#F4D1AE")) +
+  scale_fill_manual(values = c("#F4D1AE","#12263A","#00C6B8")) +
   # geom_violin(draw_quantiles = TRUE, scale = "count") +
-  labs(x="", y=bquote('pairwise' ~'D'[PS])) +
-  theme(plot.background = element_blank(),
+  labs(x="", y=bquote( ~'D'[PS])) +
+  theme(plot.background = element_rect(fill = "white"),
         panel.grid.major.y = element_line(color = "black", linetype = "dashed"),
         panel.grid.major.x = element_blank(),
         panel.grid.minor = element_blank(),
-        panel.background = element_blank(),
-        axis.line = element_line(color = "black"))
-# dps.time
-ggsave(paste0(PATH, "/figures/TemporalDps_boxplot.png"), plot=dps.time, width = 5, height = 6)
+        panel.background = element_rect(fill = "white"),
+        axis.line = element_line(color = "black"),
+        axis.text = element_text(color = "black", size = 12),
+        axis.title = element_text(size = 13))
+dps.time
+ggsave(paste0(PATH, "/figures/TemporalDps_boxplot.png"), plot=dps.time, width = 7, height = 6)
 
 pw.box %>% filter(group == "Pop A vs Pop A \nin previous years") %>% slice_max(Dps, n=5)
 pw.box %>% filter(pop1 == "8" | pop2 == "8") %>% filter(pop1 != pop2) %>% mutate(mean = mean(Dps)) #avg. is 0.375
@@ -453,16 +489,21 @@ global.gst <- read.csv(paste0(PATH, "/results_tables/Gst_global.csv"))
 global.gst <- global.gst %>% mutate(gr = case_when(group %in% c("Pop_Group", "Year_Group", "Year_Pop") ~ "all",
                                                group %in% c("2014", "2019", "2021") ~ "one"))
 
+# global.gst <- read.csv(paste0(PATH, "/results_tables/Fst_global.csv"))
+# global.gst <- global.gst %>% mutate(gr = case_when(group %in% c("All_Yrs", "All_Pops") ~ "all",
+#                                                group %in% c("2014", "2019", "2021") ~ "one"),
+#                                     observed = Fst, lower.normal = CI_ll, upper.normal = CI_ul)
+
 pg <- ggplot(data = global.gst %>% filter(group != "Year_Pop"), aes(x=group, y=observed)) +
   geom_rect(xmin = 0, xmax = 3.5, ymin = -Inf, ymax = Inf, fill="#E5E4E2", alpha = 0.1) +
   geom_errorbar(aes(x=group, ymin=lower.normal, ymax=upper.normal), color="black", width=0.3) +
   geom_line(color="black") +
   geom_point(aes(fill=gr), shape=21, color="black", size=5.5) +
-  scale_fill_manual(values = c("#2B847C", "#DF9F1F")) +
-  scale_x_discrete(labels=c("2014", "2019", "2021", "All x\nPop", "All x\nYear", "All x\nYear+Pop")) +
+  scale_fill_manual(values = c("#12263A", "#F4D1AE")) +
+  # scale_x_discrete(labels=c("2014", "2019", "2021", "All x\nPop", "All x\nYear", "All x\nYear+Pop")) +
   geom_vline(aes(xintercept=3.5), linetype="dashed") +
   labs(y=bquote('Global' ~'G"'[ST])) +
-  ggtitle(bquote(atop('Global' ~'G"'[ST]~ '','with 95% confidence intervals'))) +
+  # ggtitle(bquote(atop('Global' ~'G"'[ST]~ '','with 95% confidence intervals'))) +
   theme(legend.position = "none",
         panel.background = element_blank(),
         panel.grid = element_line(color="#E5E4E2"),
@@ -472,7 +513,7 @@ pg <- ggplot(data = global.gst %>% filter(group != "Year_Pop"), aes(x=group, y=o
         axis.title.y = element_text(size = 15),
         axis.text.x = element_text(size = 15),
         axis.text.y = element_text(size = 12))
-# pg
+pg
 ggsave(filename = paste0(PATH, "/figures/global_gst_points.png"), plot = pg, width = 6, height = 6)
 ```
 
@@ -512,7 +553,7 @@ heat.gst <- ggplot() +
 heat.gst
 ggsave(paste0(PATH, "/figures/pairwiseGst_heatmap_", ind.names[[6]], ".png"), plot = heat.gst) 
 
-#boxplot
+#boxplot + summarize
 pw <- read.csv(paste0(PATH, "/results_tables/Year_Pop_pairwiseGst.csv"))
 pw <- pw %>% 
   rename_with(.cols = starts_with("X2"), .fn = ~ gsub("X", "", .x)) %>%
@@ -532,36 +573,47 @@ pw.long <- pw %>%
   mutate(X2 = gsub("X", "", X2)) %>%
   mutate(X2 = fct_relevel(factor(X2), gsub("X", "", names(pw[,-1])))) %>%
   filter(X != X2)
+
 pw.box <- pw.long %>% 
   mutate(pop1 = gsub("^[0-9]{4}_", "", X), 
          pop2 = gsub("^[0-9]{4}_", "", X2),
          year1 = as.numeric(gsub("_[0-9]*$", "", X)), 
          year2 = as.numeric(gsub("_[0-9]*$", "", X2))) #pull out pops + year
-  
 pw.box <- pw.box %>%
   mutate(group = case_when( 
-    pop1 == pop2 & year1 - year2 > 0 ~ "Pop A vs Pop A \nin previous years", #pop with itself in t-1 or t-2
-    pop1 != pop2 & year1 - year2 > 0 ~ "Pop A vs all other pops \nin previous years", #pop with other pops in t-1 or t-2
-    pop1 != pop2 & year1 == year2 ~ "Pop A vs all other pops \nin same year",
+    pop1 == pop2 & year1 - year2 > 0 ~ "Pop X vs Pop X\nin previous\nsample periods", #pop with itself in t-1 or t-2
+    pop1 != pop2 & year1 - year2 > 0 ~ "Pop X vs all other pops\nin previous\nsample periods", #pop with other pops in t-1 or t-2
+    pop1 != pop2 & year1 == year2 ~ "Pop X vs all other pops\nin the same\nsample period",
     TRUE ~ "other"
   ))
+pw.box <- pw.box %>%
+  mutate(group = fct_relevel(as.factor(group), c("Pop X vs Pop X\nin previous\nsample periods", "Pop X vs all other pops\nin previous\nsample periods", "Pop X vs all other pops\nin the same\nsample period")))
 
 gst.time <- ggplot(data = pw.box, aes(group, pGst)) +
   gghalves::geom_half_boxplot(aes(fill=group), errorbar.length = 0.25, show.legend = F, outlier.shape = NA) +
   gghalves::geom_half_point(color="black", alpha = 0.6) +
-  scale_fill_manual(values = c("#00C6B8", "#12263A", "#F4D1AE")) +
+  scale_fill_manual(values = c("#F4D1AE","#12263A","#00C6B8")) +
   # geom_violin(draw_quantiles = TRUE, scale = "count") +
   labs(x="", y=bquote('pairwise' ~'G"'[ST])) +
-  theme(plot.background = element_blank(),
+  theme(plot.background = element_rect(fill = "white"),
         panel.grid.major.y = element_line(color = "black", linetype = "dashed"),
         panel.grid.major.x = element_blank(),
         panel.grid.minor = element_blank(),
-        panel.background = element_blank(),
-        axis.line = element_line(color = "black"))
-# gst.time
-ggsave(paste0(PATH, "/figures/TemporalGst_boxplot.png"), plot=gst.time, width = 5, height = 6)
+        panel.background = element_rect(fill = "white"),
+        axis.line = element_line(color = "black"),
+        axis.text = element_text(color = "black", size = 12),
+        axis.title = element_text(size = 13))
+gst.time
+ggsave(paste0(PATH, "/figures/TemporalGst_boxplot.png"), plot=gst.time, width = 7, height = 6)
 
-# pw.box %>% filter(group == "Pop A vs Pop A \nin previous years") %>% slice_max(pGst, n=5)
+#summary of comparisons
+pw.box %>% group_by(group) %>% summarise(mean = mean(pGst))
+pw.box %>% filter(group == "Pop X vs Pop X\nin previous\nsample periods") %>% slice_max(pGst, n=5)
+pw.box %>% filter(group != "Pop X vs Pop X\nin previous\nsample periods") %>% slice_max(pGst, n=10)
+pw.box %>% filter(group != "Pop X vs Pop X\nin previous\nsample periods") %>% slice_min(pGst, n=10)
+pw.box %>% filter(pop1 %in% c(3, 9) & pop2 %in% c(3, 9) & pop1 != pop2) %>% summarise(mean = mean(pGst))
+pw.box %>% filter(pop1 %in% c(4, 5) & pop2 %in% c(4, 5) & pop1 != pop2) %>% summarise(mean = mean(pGst))
+pw.box %>% filter(pop1 %in% c(5, 6) & pop2 %in% c(5, 6) & pop1 != pop2) %>% summarise(mean = mean(pGst))
 ```
 
 \begin{figure}[!ht]

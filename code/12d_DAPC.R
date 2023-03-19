@@ -126,7 +126,7 @@ ggplot() +
   scale_fill_manual(values = aztf.pal, aesthetics = "fill") +
   scale_shape_manual(values = c(21, 22, 23)) +
   guides(fill = guide_legend(override.aes=list(shape=21)), color="none") +
-  labs(x=axis1, y=axis2, fill="Pond", color="Group", shape="Year") +
+  labs(x=axis1, y=axis2, fill="Pop", color="Group", shape="Year") +
   theme(legend.position = "right", 
         panel.background = element_blank(), 
         panel.grid.major = element_line(colour = "gray", linetype = 4),
@@ -187,7 +187,7 @@ dapc_dist %>% filter(delta_yrs == "2014_2021") %>% View()
 dapc_dist %>% group_by(pop) %>% mutate(m = mean(dist)) %>% select(pop, m) %>% distinct() %>% View()
 
 #multiple Ks iterations ----
-my_k <- 6:8
+my_k <- c(6, 8)
 
 grp_l <- vector(mode = "list", length = length(my_k))
 dapc_l <- vector(mode = "list", length = length(my_k))
@@ -221,11 +221,44 @@ for (i in 1:length(dapc_l)) {
       mutate(ID = row.names(.)) %>% 
       left_join(aztf, by = "ID") %>% 
       select(ID, year, pop, Group, starts_with("LD")) %>%
-      mutate(pop = as.factor(as.numeric(pop)),
+      mutate(year_pop = paste0(year, "_", pop),
+             pop = as.factor(as.numeric(pop)),
              year = fct_relevel(factor(year), c("2014", "2019", "2021")))
     }
   
   write.csv(dapc2plot, file=paste0(PATH, "/results_tables/DAPC_res/", ind.names[[p]], "_K", my_k[[i]],".csv"), row.names = F)
+  
+  if(my_k[[i]] == 6) {
+    centroids <- aggregate(cbind(LD1, LD2, LD3, LD4, LD5) ~ year_pop, dapc2plot, mean) %>%
+      left_join(., dapc2plot %>% select(year_pop, pop, year) %>% distinct()) }
+  if(my_k[[i]] == 8) {
+    centroids <- aggregate(cbind(LD1, LD2, LD3, LD4, LD5, LD6, LD7) ~ year_pop, dapc2plot, mean) %>%
+      left_join(., dapc2plot %>% select(year_pop, pop, year) %>% distinct()) }
+  
+  #calculate distance traveled
+  dapc_dist <- centroids %>%
+    arrange(pop, year) %>%
+    group_by(pop) %>%
+    mutate(across(contains("LD"), ~ (.x - lag(.x, default = NA))^2, .names = "{.col}_delt2"), #(deltaLD)^2
+           delta_yrs = paste0(lag(year, default = NA), "_", year)) %>%
+    select(pop, contains("delt")) %>%
+    filter(!is.na(LD1_delt2)) %>%
+    ungroup() %>%
+    rowwise(pop, delta_yrs) %>%
+    summarise(dist = sqrt( sum( c_across( contains("delt2") ) ) ))
+  long_dist <- centroids %>%
+    filter(year != 2019) %>%
+    arrange(pop, year) %>%
+    group_by(pop) %>%
+    mutate(across(contains("LD"), ~ (.x - lag(.x, default = NA))^2, .names = "{.col}_delt2"), #(deltaLD)^2
+           delta_yrs = paste0(lag(year, default = NA), "_", year)) %>%
+    select(pop, contains("delt")) %>%
+    filter(!is.na(LD1_delt2)) %>%
+    ungroup() %>%
+    rowwise(pop, delta_yrs) %>%
+    summarise(dist = sqrt( sum( c_across( contains("delt2") ) ) ))
+  dapc_dist <- bind_rows(dapc_dist, long_dist) %>% distinct() %>% arrange(pop)
+  write.csv(dapc_dist, file = paste0(PATH, "/results_tables/DAPC_distance_traveled_K", my_k[[i]], ".csv"), row.names = F)
   
   if ("LD2" %in% colnames(dapc2plot) == FALSE) { 
     
@@ -244,17 +277,24 @@ for (i in 1:length(dapc_l)) {
 
     pca <- ggplot() +
       stat_ellipse(data = dapc2plot, aes(x=LD1, y=LD2, fill=pop, group=pop), geom="polygon", type = "t", alpha = 0.5, size=1, level = 0.9) +
-      stat_ellipse(data = dapc2plot, aes(x=LD1, y=LD2, color=Group, group=Group), type = "t", alpha = 0.95, size=1, level = 0.9) +
-      geom_point(data = dapc2plot, aes(x=LD1, y=LD2, fill=pop, shape=year), color="black", size=2.3, alpha=0.7) +
+      #stat_ellipse(data = dapc2plot, aes(x=LD1, y=LD2, color=Group, group=Group), type = "t", alpha = 0.95, size=1, level = 0.9) +
+      #geom_point(data = dapc2plot, aes(x=LD1, y=LD2, fill=pop, shape=year), color="black", size=2.3, alpha=0.7) +
       # geom_point(data = dapc2plot %>% filter(Group == 2), aes(x=LD1, y=LD2, fill=pop, shape=year), color="black", size=4.5, alpha=0.5) +
-      labs(x="LD1", y="LD2", fill="Pond", color="Group", shape="Year", title=paste0("K = ", my_k[i])) +
+      geom_point(data = centroids %>% filter(pop == 4), aes(x=.data[[axis1]], y=.data[[axis2]], fill=pop, shape=year), size=5, alpha=1) +
+      geom_path(data = centroids %>% filter(pop == 4), aes(x=.data[[axis1]], y=.data[[axis2]], group = pop), arrow = arrow(type = "closed", length=unit(0.08, "inches"))) +
+      geom_point(data = centroids %>% filter(pop == 5), aes(x=.data[[axis1]], y=.data[[axis2]], fill=pop, shape=year), size=5, alpha=1) +
+      geom_path(data = centroids %>% filter(pop == 5), aes(x=.data[[axis1]], y=.data[[axis2]], group = pop), arrow = arrow(type = "closed", length=unit(0.08, "inches"))) +
+      geom_point(data = centroids %>% arrange(pop) %>% filter(!pop %in% c(4, 5)), aes(x=.data[[axis1]], y=.data[[axis2]], fill=pop, shape=year), size=5, alpha=1) +
+      geom_path(data = centroids %>% arrange(year) %>% filter(!pop %in% c(4, 5)), aes(x=.data[[axis1]], y=.data[[axis2]], group = pop), arrow = arrow(type = "closed", length=unit(0.08, "inches"))) +
+      labs(x="LD1", y="LD2", fill="Pop", color="Group", shape="Year", title=paste0("K = ", my_k[i])) +
       scale_fill_manual(values = aztf.pal, aesthetics = "fill") +
       # scale_color_manual(values = aztf.pal, aesthetics = "color") +
       guides(fill = guide_legend(override.aes=list(shape=21)), color="none") +
       scale_shape_manual(values = c(21, 22, 23)) +
-      theme(legend.position = "bottom", 
+      theme(legend.position = "right", 
             panel.background = element_blank(), 
-            panel.grid.major = element_line(colour = "gray", linetype = 4))
+            panel.grid.major = element_line(colour = "gray", linetype = 4),
+            legend.key = element_blank())
   
     }
   
@@ -270,10 +310,11 @@ for (i in 1:length(dapc_l)) {
 # # pca2
 }
 
-ggarrange(plotlist=dplot_l, p1,
+ggarrange(plotlist=dplot_l, 
+          #p1,
           ncol = 2, nrow = round(length(dplot_l)/2), common.legend = TRUE, legend="right")
 
-ggsave(filename = paste0(PATH, "/figures/DAPC_", ind.names[[p]], "_clustercomp.png"), plot = last_plot(), width = 8, height = 8)
+ggsave(filename = paste0(PATH, "/figures/DAPC_", ind.names[[p]], "_clustercomp.png"), plot = last_plot(), width = 10, height = 7)
 
 # change over time dapc ----
 # only relevant to year_pop grouping!

@@ -476,22 +476,43 @@ p14_21 <- ggmap(az.base) +
 ## Ne vs Sample Size  
 
 ``` {r, echo=F, eval=F}
-coord <- read.csv(paste0(PATH, "/pond_coordinates.csv")) %>% st_as_sf(coords=c("lon", "lat"), crs=st_crs(32612))
-sumdat <- read.csv(paste0(PATH,"/HYWR_multiyear_popsumm.csv"))
-tot <- read.csv(paste0(PATH,"/multiyear_hywr_tracking.csv"))
+tot <- read.csv(paste0(PATH,"/multiyear_hywr_tracking.csv")) %>% 
+  filter(!Pond.Number %in% c(2, 5, 11, 12, 13, 14, 15)) %>%
+  mutate(Pond.Number = case_when(Pond.Number == "1" ~ 1,
+                         Pond.Number == "4" ~ 2,
+                         Pond.Number == "3" ~ 3,
+                         Pond.Number == "6" ~ 4, 
+                         Pond.Number == "7" ~ 5, 
+                         Pond.Number == "8" ~ 6, 
+                         Pond.Number == "9" ~ 7, 
+                         Pond.Number == "10" ~ 8, 
+                         Pond.Number == "16" ~ 9))
 tot14 <- tot %>% filter(Year.Sampled == '2014')
+tot18 <- tot %>% filter(Year.Sampled == '2018') %>% mutate(Year.Sampled = 2019)
 tot <- tot %>% filter(Plate_PM1 != "") %>% filter(Plate_PM1 != "--")
-tot <- bind_rows(tot, tot14)
+tot <- bind_rows(tot, tot14, tot18)
+
+nosib <- tot %>%
+  filter(Sibling.Action == "keep") %>% 
+  select(Year.Sampled, Pond.Number) %>%
+  count(Year.Sampled, Pond.Number) %>%
+  pivot_wider(id_cols=Pond.Number, names_from = Year.Sampled, values_from=n) %>%
+  replace(is.na(.), 0) %>%
+  rename(ns2014 = '2014',
+         ns2019 = '2019',
+         ns2021 = '2021',
+         pop = Pond.Number) %>%
+  filter(pop %in% ns$pop)
 
 coord <- coord %>%
   select(-year_pop) %>%
-  filter(pop %in% c("1", "3", "4", "6", "7", "8", "9", "10", "16")) %>%
-  left_join(sumdat, by="pop") %>%
-  mutate(pop = fct_relevel(factor(pop), c("1", "3", "4", "6", "7", "8", "9", "10", "16"))) %>%
+  left_join(nosib, by="pop") %>%
+  mutate(pop = as.factor(as.numeric(pop))) %>%
   left_join(dNet, by=c('pop'='pond')) %>%
   distinct()
 ns <- coord %>%
   select(pop, matches('2014|2019|2021'))
+
 sumtot <- tot %>%
   select(Year.Sampled, Pond.Number) %>%
   count(Year.Sampled, Pond.Number) %>%
@@ -501,27 +522,31 @@ sumtot <- tot %>%
          t2019 = '2019',
          t2021 = '2021',
          pop = Pond.Number) %>%
-  filter(pop %in% ns$pop)
-ns <- left_join(ns, sumtot, by='pop') %>% st_drop_geometry()
+  filter(pop %in% ns$pop) %>%
+  mutate(pop = as.factor(as.numeric(pop)))
+
+ns <- left_join(ns, sumtot, by='pop') #%>% st_drop_geometry()
 ns[is.na(ns)] <- 0
 names(ns) <- c("pop", "y2014_NoSibs", "y2019_NoSibs", "y2021_NoSibs", "y2014_Ne", "y2019_Ne", "y2021_Ne", "y2014_Sibs", "y2019_Sibs", "y2021_Sibs")
-ns[ns$pop == "16", "y2019_Sibs"] <- 12
+
 gns <- ns %>% pivot_longer(cols = -pop) %>%
   mutate(year = gsub("\\D+", "", name),
          type = gsub(".*_", "", name)) %>%
   select(-name) %>% 
+  distinct() %>%
   pivot_wider(names_from = type, values_from = value) %>%
   mutate(ind_lost = Sibs - NoSibs)
 write.csv(gns, file=paste0(PATH,"/results_tables/sample_count_summary.csv"), row.names = F)
 
 sne.theme <- list(
   scale_color_manual(values = c("#CCCCCC", "#999999", "#333333"), aesthetics = "color"),
+  scale_x_continuous(breaks = c(10, 20, 30, 40, 50), limits = c(7, 51)),
   theme(panel.background = element_blank(),
         axis.line.x = element_line(color = "black"),
         axis.line.y = element_line(color = "black"),
         panel.grid = element_line(color="#E5E4E2"),
-        axis.title = element_text(size = 21),
-        axis.text = element_text(size = 18))
+        axis.title = element_text(size = 16),
+        axis.text = element_text(size = 14))
 )
 
 ps <- ggplot(gns %>% filter(between(Ne, 1, 400))) +
@@ -530,21 +555,29 @@ ps <- ggplot(gns %>% filter(between(Ne, 1, 400))) +
   geom_smooth(method = "lm", formula='y~x', aes(x=Sibs, y=Ne, color=year), se=F) +
   geom_smooth(method = "lm", formula='y~x', aes(x=Sibs, y=Ne), linetype="dashed", color="red", se=F) +
   labs(x="Siblings Removed", y="Effective Population Size") +
-  sne.theme
-print(cor.test(gns$Sibs, gns$Ne, method = "pearson"))
+  sne.theme +
+  theme(legend.position = "none")
 
 pns <- ggplot(gns %>% filter(between(Ne, 1, 400))) +
 # ggplot(gns %>% filter(between(Ne, 0, 400))) +
   geom_point(aes(x=NoSibs, y=Ne, color=year)) +
   geom_smooth(method = "lm", formula='y~x', aes(x=NoSibs, y=Ne, color=year), se=F) +
   geom_smooth(method = "lm", formula='y~x', aes(x=NoSibs, y=Ne), linetype="dashed", color="red", se=F) +
-  labs(x="Siblings Not Removed", y="Effective Population Size") +
+  labs(x="Siblings Not Removed", y="") +
   sne.theme
-print(cor.test(gns$NoSibs, gns$Ne, method = "pearson"))
 
-plot_grid(ps, pns, align = "h")
+plot_grid(ps, pns, align = "h", rel_widths = c(1, 1.3))
+ggsave(paste0(PATH, "/figures/NevsSampleSize.png"), width = 8, height = 4)
 # ggsave(filename = paste0(PATH,"/figures/NevsSibs.png"), plot = ps, width = 5, height = 5)
 # ggsave(filename = paste0(PATH,"/figures/NevsNoSibs.png"), plot = pns, width = 5, height = 5)
+print(cor.test(gns$NoSibs, gns$Ne, method = "pearson")) #all
+print(cor.test(gns$Sibs, gns$Ne, method = "pearson")) #all
+print(cor.test((gns %>% filter(year == 2014))$Sibs, (gns %>% filter(year == 2014))$Ne, method = "pearson"))
+print(cor.test((gns %>% filter(year == 2019))$Sibs, (gns %>% filter(year == 2019))$Ne, method = "pearson"))
+print(cor.test((gns %>% filter(year == 2021))$Sibs, (gns %>% filter(year == 2021))$Ne, method = "pearson"))
+print(cor.test((gns %>% filter(year == 2014))$NoSibs, (gns %>% filter(year == 2014))$Ne, method = "pearson"))
+print(cor.test((gns %>% filter(year == 2019))$NoSibs, (gns %>% filter(year == 2019))$Ne, method = "pearson"))
+print(cor.test((gns %>% filter(year == 2021))$NoSibs, (gns %>% filter(year == 2021))$Ne, method = "pearson"))
 ```
 
 \begin{figure}[ht!]
@@ -625,6 +658,7 @@ nameStrata(ind.list[[1]]) <- ~year/pop #rename
 
 #amova
 amova <- poppr::poppr.amova(ind.list[[1]], hier = ~year/pop, method = "ade4")
+amova
 
 #test for significance
 system.time(
