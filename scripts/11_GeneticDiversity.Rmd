@@ -1,0 +1,672 @@
+---
+title: "Genetic Diversity Results"
+author: "C. E. Moore"
+output: 
+  pdf_document:
+    latex_engine: pdflatex
+urlcolor: blue
+header-includes:
+  \usepackage{helvet}
+  \renewcommand{\familydefault}{\sfdefault}
+---
+Last updated on `r Sys.Date()`  
+  
+*Note: Microsat data previously formatted from geneious output using 01a_DataPrep.R and then filtered for missing data in 10_MicrosatSummary.Rmd*  
+
+**Contents:**  
+1. Allelic Richness  
+2. Hobs & Hexp  
+3. Allele frequencies  
+4. Effective population size  
+5. Inbreeding  
+  
+```{r paths and data load, echo=FALSE, message=FALSE}
+## packages
+library(adegenet); library(ape); library(pegas); library(knitr); library(tidyverse); library(cowplot)
+
+## home path
+PATH <- "/home/chloe9mo/Documents/Projects/temporal_aztreefrog"
+
+source(file = paste0(PATH, "/code/01c_DataLoad.R"))
+```
+**Loaded packages:** `r (.packages())`  
+
+***  
+# Rarefied Allelic Richness
+``` {r AR, echo=FALSE}
+#for rarefied ->  finds lowest valid sample size across pops + loci and multiplies it by the ploidy (2)
+ar.list <- list()
+
+for (i in 1:length(ind.list)) {
+  
+  ind.list
+  ind.ar <- allelicrichness(as.loci(ind.list[[i]]), pop = as.loci(ind.list[[i]])$population, method = "rarefaction")
+  cat(ind.names[[i]], "\n")
+  m.ar <- apply(ind.ar, 1, mean)
+  cat(m.ar, "\n")
+  m.ar <- as.data.frame(m.ar) %>% mutate(pop = row.names(.))
+  m.ar$year <- sub(".*(\\d+{4}).*$", "\\1", ind.names[[i]])
+  ar.list[[i]] <- m.ar
+  cat("---------------------------", "\n")
+  
+}
+
+# ar.list <- ar.list[-c(1,2)]
+ar.div <- bind_rows(ar.list) %>%
+  mutate(group = case_when(year == "All Yrs - Indiv x Pop" ~ "All_Yrs",
+                           year == "All Yrs - Indiv x Year" ~ "All_Pops",
+                           year == "2014" ~ "2014",
+                           year == "2019" ~ "2019",
+                           year == "2021" ~ "2021",
+                           T ~ year)) %>%
+  arrange(pop, group) %>%
+  relocate(pop, group) %>% select(-year)
+
+write.csv(ar.div, file = paste0(PATH, "/results_tables/allelic_richness.csv"), row.names = F)
+```
+```{r theme set up, echo=F}
+dtheme <- list(
+  geom_line(aes(color=pop)),
+  geom_point(aes(color=pop)),
+  scale_color_manual(values = aztf.pal),
+  scale_x_discrete(expand = c(0.01,0.01)),
+  theme(panel.background = element_blank(),
+        panel.border = element_blank(),
+        panel.grid = element_line(color="#E5E4E2"),
+        legend.key = element_blank(),
+        legend.text = element_text(size=15),
+        legend.title = element_text(size = 15),
+        plot.title = element_text(face = "bold", size = 18),
+        axis.title = element_text(size=15),
+        axis.text = element_text(size=13),
+        axis.text.x = element_text(angle = 35, vjust = 1, hjust = 1),
+        axis.line.x.bottom = element_line(color="black"),
+        axis.line.y.left = element_line(color="black"))
+)
+```
+
+``` {r ar fig, echo=F, fig.align="center", eval=F}
+p.ar <- ggplot(data = ar.div %>% filter(!group %in% c("All_Yrs", "All_Pops")), aes(x=group, y=m.ar, group=pop)) +
+  labs(x="Sample Year", y="Rarefied Allelic Richness") +
+  dtheme +
+  theme(title = element_blank(),
+        legend.position = "right") +
+  guides(color = guide_legend(title = "Pond"))
+p.ar
+ggsave(filename = paste0(PATH, "/figures/delta_allelicrichness_legend.png"), plot = p.ar, width = 3, height = 5.45)
+```
+<!-- \begin{figure}[!h] -->
+<!-- \centering -->
+<!-- \includegraphics[width=0.5\textwidth]{"/home/chloe9mo/Documents/Projects/temporal_aztreefrog//figures/delta_allelicrichness_nolegend.png"} -->
+<!-- \caption{Change in allelic richness over time.} -->
+<!-- \end{figure} -->
+
+***  
+
+# Observed & Expected Heterozygosity  
+``` {r hobs hexp, echo=FALSE, results='asis'}
+div.list <- list()
+for (i in 1: length(ind.list)) {
+  
+  # separate by population
+  Hobs <- t(sapply(seppop(ind.list[[i]]), function(ls) summary(ls)$Hobs))
+  Hexp <- t(sapply(seppop(ind.list[[i]]), function(ls) summary(ls)$Hexp))
+  
+  cat(" exp. H for", ind.names[[i]], "\n")
+  print(kable(as.data.frame(round(Hexp, 2))))
+  cat("\n", " obs. H for", ind.names[[i]], "\n")
+  print(kable(as.data.frame(round(Hobs, 2))))
+  cat("\n")
+  
+  a.hexp <- as.data.frame(apply(Hexp, 1, mean)) %>% rownames_to_column(var = "pop")
+  ah <- as.data.frame(apply(Hobs, 1, mean)) %>% rownames_to_column(var = "pop") %>% left_join(., a.hexp, by="pop")
+  names(ah) <- c("pop", "H_obs", "H_exp")
+  ah <- ah %>% mutate(H_diff = if_else(H_obs - H_exp > 0, "Hobs higher", "Hobs lower"))
+  
+  print(kable(ah, caption = ind.names[[i]]))
+  ah <- ah %>% mutate(year = sub('.*(?=.{4}$)', '', ind.names[[i]], perl=T))
+  div.list[[i]] <- ah
+  
+  # par(mfrow = c(2,1))
+  # barplot(ah$H_exp ~ ah$pop, beside = T, ylim = c(0,1), col = "grey", ylab = "Expected heterozygosity", xlab = "Group")
+  # barplot(ah$H_obs ~ ah$pop, beside = T, ylim = c(0,1), col = "grey", ylab = "Observed heterozygosity", xlab = "Group")
+  
+  cat("\n", "global observed for", ind.names[[i]], "=", mean(Hobs))
+  cat("\n", "-------------------------------------------", "\n", "\n")
+  
+}
+
+g.hobs <- data.frame(unlist(ind.names), stringsAsFactors = F) %>% 
+  add_column(global_Hobs = NA) %>% rename(group = unlist.ind.names.)
+
+for (i in 1:length(ind.list)) {
+  
+  Hobs <- t(sapply(seppop(ind.list[[i]]), function(ls) summary(ls)$Hobs))
+  g.hobs[g.hobs$group == ind.names[[i]],]$global_Hobs <- mean(Hobs)
+  
+}
+
+kable(g.hobs, caption="Global Observed Heterozygosity")
+#  observed frequently lower than expected, some pops inbreeding?
+#  high amounts of diversity
+
+div.full <- bind_rows(div.list) %>%
+  mutate(group = case_when(year == " Pop" ~ "All_Yrs",
+                           year == "Year" ~ "All_Pops",
+                           year == "2014" ~ "2014",
+                           year == "2019" ~ "2019",
+                           year == "2021" ~ "2021"),
+         hdiff = H_exp - H_obs) %>%
+  arrange(pop, group) %>%
+  relocate(pop, group) %>% select(-year)
+write.csv(div.full, file = paste0(PATH,"/results_tables/hdiv_summary.csv"), row.names = F)
+```
+
+# Change in heterozygosity over time  
+```{r, echo=F, message=F, eval=FALSE}
+div.list <- div.list[-c(1,2)]
+hdiv <- bind_rows(div.list)
+hdiv <- hdiv %>% mutate(hdiff = H_exp - H_obs)
+
+p.ho <- ggplot(data = hdiv, aes(x=year, y=H_obs, group=pop)) +
+  labs(x="Sample Year", y="Obs. Heterozygosity") +
+  dtheme +
+  scale_y_continuous(limits = c(0.58, 0.76), breaks = c(0.60, 0.65, 0.70, 0.75)) +
+  theme(title = element_blank(),
+        legend.position = "none")
+p.he <- ggplot(data = hdiv, aes(x=year, y=H_exp, group=pop)) +
+  labs(x="Sample Year", y="Exp. Heterozygosity") +
+  dtheme +
+  scale_y_continuous(limits = c(0.58, 0.76), breaks = c(0.60, 0.65, 0.70, 0.75)) +
+  theme(title = element_blank(),
+        legend.position = "none")
+p.hd <- ggplot(data = hdiv, aes(x=year, y=hdiff, group=pop)) +
+  geom_rect(xmin = -Inf, xmax = Inf, ymin = -0.1, ymax = 0, fill="blue", alpha = 0.005) +
+  geom_rect(xmin = -Inf, xmax = Inf, ymin = 0, ymax = 0.1, fill="red", alpha = 0.005) +
+  # geom_hline(yintercept = 0, linetype="dashed", color="red") +
+  scale_y_continuous(limits = c(-0.092, 0.092), breaks = c(-0.08, -0.04, 0, 0.04, 0.08)) +
+  labs(x="Sample Year", y=bquote(~H[e]~ '-' ~H[o]~ '')) +
+  dtheme +
+  theme(title = element_blank(),
+        legend.position = "none")
+
+ggsave(filename = paste0(PATH, "/figures/delta_Ho.png"), plot = p.ho, width = 3, height = 5.45)
+ggsave(filename = paste0(PATH, "/figures/delta_He.png"), plot = p.he, width = 3, height = 5.45)
+ggsave(filename = paste0(PATH, "/figures/delta_diffH_nolegend.png"), plot = p.hd, width = 3, height = 5.45)
+
+#aligned figure
+p.ar <- p.ar + labs(x="")
+p.ho <- p.ho + labs(x="")
+p.he <- p.he + labs(x="")
+p.hd <- p.hd + labs(x="")
+p.all <- plot_grid(p.ho, p.he, p.hd, p.ar, nrow = 1, ncol = 4, labels = "AUTO", rel_widths = c(1, 1, 1, 1.25))
+p.all <- add_sub(p.all, "Sample Year", vpadding=grid::unit(0,"lines"),y=6, x=0.5, vjust=4.5)
+ggsave(filename = paste0(PATH, "/figures/delta_GenDiv.png"), plot = p.all, width = 12, height = 6)
+```
+\begin{figure}[!h]
+\centering
+\includegraphics[width=0.5\textwidth]{"/home/chloe9mo/Documents/Projects/temporal_aztreefrog/figures/delta_GenDiv.png"}
+\caption{Change in allelic richness over time.}
+\end{figure}
+\bigbreak
+
+***
+# Allele frequencies
+**Note:** With 17 loci, freq. should add up to 17. Second table on each set is a check.  
+  
+``` {r, echo=F, message=F}
+for (i in 1:length(pop.list)) {
+  
+  cat(pop.names[[i]], "\n")
+  freq <- adegenet::makefreq(pop.list[[i]])
+  cat("\n", "There are ", ncol(freq), " alleles.", "\n", "Looking at freq of first 10.", "\n")
+  print(round(freq[, 1:10], 2))
+  cat("\n", "Checking they add to 17:", "\n")
+  print(apply(freq, 1, sum))
+  cat("\n", "==============================================", "\n")
+  
+}
+
+```
+
+***
+# Effective population size
+
+``` {r, echo=F, message=F, fig.align="center", warning=F}
+Net <- read.csv(paste0(PATH, "/results_tables/Ne_Table_nosibs.csv")) %>%
+  rename(year_pop = Pop) %>%
+  select(-Notes) %>%
+  mutate(pond = gsub("[0-9]{4}_", "", year_pop),
+         year = gsub("_[0-9]*$", "", year_pop))
+Net <- Net %>% mutate(pond = factor(as.numeric(pond))) %>%
+  mutate(#Ne = ifelse(Ne == "Infinite", 800, Ne)) %>% #10000 was the replacement in Mims 2016
+         Ne = ifelse(Ne == "Infinite", NA, Ne)) %>% #removing infinite vals b/c means low sample size?
+  mutate(across(starts_with("Ne"), as.numeric))
+
+dNet <- Net %>% 
+  select(pond, year, Ne) %>% 
+  pivot_wider(id_cols = pond, names_from = year, values_from = Ne)
+names(dNet) <- c("pond", "n2014", "n2019", "n2021")
+dNet <- dNet %>%
+  mutate(d14_19 = ((n2019 - n2014)/n2014)*100,
+         d19_21 = ((n2021 - n2019)/n2019)*100, 
+         d14_21 = ((n2021 - n2014)/n2014)*100)
+
+kable(Net %>% select(year, pond, Ne, Ne.Low, Ne.High), caption = "Effective population size of all ponds and years as calculated using the LD method in NeEstimator v2, NA represents INF value estimates.")
+
+ggplot(data = Net, aes(x=year, y=Ne, group=pond)) +
+  geom_line(aes(color=pond), size=2, lineend="round", linejoin="round") +
+  geom_point(data=Net %>% filter(pond == "16"), aes(color=pond), size=2, show.legend = F) +
+  geom_point(data = Net %>% filter(is.na(Ne)), aes(x=year, y=as.numeric(pond)*40, color=pond), shape=8, size=3, stroke=2, inherit.aes = F, show.legend = F) +
+  scale_color_manual(values = aztf.pal, aesthetics = "color") +
+  labs(x="Sample Year", y="Effective Population Size (Ne)", title = "Ne change over time") +
+  coord_cartesian(ylim = c(0,400)) +
+  theme_minimal() +
+  theme(panel.grid.major.x = element_line(color = "#555555", linetype = "dashed")) +
+  scale_x_discrete(expand = c(0.04,0.04))
+ggsave(filename = paste0(PATH, "/figures/delta_Ne_legend.png"), plot = last_plot(), width = 4, height = 5)
+```
+
+``` {r dNe maps, echo=F, message=F, fig.align="center", eval=T}
+library(sf); library(ggmap); library(cowplot); library(RColorBrewer)
+sp.ne <- coord %>%
+  left_join(Net %>% select(-year), by=c("year_pop")) %>%
+  # filter(!is.na(Ne)) %>%
+  # filter(!pop %in% c(2, 5, 11:15)) %>%
+  st_as_sf(coords=c("lon", "lat"), crs=st_crs(32612)) %>%
+  mutate(Ne = ifelse(Ne == "Inf", NA, Ne))#WGS 84 / UTM zone 12N
+sp.ne <- sp.ne %>% left_join(dNet %>% select(pond, d14_19, d19_21, d14_21), by = "pond")
+
+e <- as.data.frame(as.matrix(st_bbox(sp.ne))) %>% rownames_to_column(var = "name") %>% pivot_wider(names_from = name, values_from = V1)
+e[,c(1:2)] <- e[,c(1:2)] - 0.02 #1 degrees diff = ~100 km
+e[,c(3:4)] <- e[,c(3:4)] + 0.02
+
+az.base <- get_map(location = c(left = e$xmin, bottom = e$ymin, right = e$xmax, top = e$ymax),
+                   maptype = "terrain")
+sp.dne <- sp.ne %>% select(pond, d14_19, d19_21, d14_21) %>% distinct()
+
+# c("#F4D1AE", "#12263A", "#00C6B8") 3 color palette
+ggaztf_theme <- list(
+  coord_sf(datum = sf::st_crs(sp.ne)),
+  # scale_fill_viridis_c(option="magma", guide = "legend", 
+  #                      limits=c(min(sp.ne$Ne, na.rm = T), max(sp.ne$Ne, na.rm = T)),
+  #                      breaks = c(10, 60, 110, 160, 210, 260, 310, 540)),
+  scale_fill_gradient(low = "#FFFFFF", high = "#12181E",  guide = "legend",
+                      limits=c(min(sp.ne$Ne, na.rm = T), max(sp.ne$Ne, na.rm = T)),
+                      # breaks = round(seq(range(sp.ne.noinf$Ne)[1], range(sp.ne.noinf$Ne)[2], length.out = 5), 0)),
+                      breaks = c(10, 50, 100, 200, 300)),
+  scale_size_continuous(range = c(4, 14), guide = "legend",
+                        limits=c(min(sp.ne$Ne, na.rm = T), max(sp.ne$Ne, na.rm = T)),
+                        # breaks = round(seq(range(sp.ne.noinf$Ne)[1], range(sp.ne.noinf$Ne)[2], length.out = 5), 0)),
+                      breaks = c(10, 50, 100, 200, 300)),
+  labs(x = "Longitude", y = "Latitude"),
+  theme(
+        panel.background = element_blank(),
+        panel.border = element_rect(fill=NA, color = "black"),
+        legend.key = element_blank(),
+        legend.text = element_text(size=18),
+        legend.title = element_text(size = 18),
+        plot.title = element_text(face = "bold", size = 18),
+        axis.title = element_text(size=15),
+        axis.text = element_text(size=13))
+  )
+
+plot_ne <- function(ne.table, set.yr, plot_inf = FALSE, add_legend = TRUE) {
+  sp.ne.noinf <- sp.ne %>% filter(Ne < 350) %>% filter(year == set.yr)
+  sp.ne.inf <- sp.ne %>% filter(is.na(Ne)) %>% mutate(Ne = "Inf") %>% filter(year == set.yr)
+  
+  #set basic plot
+  p.ne <- ggmap(az.base) +
+    geom_sf(data = sp.ne %>% 
+              group_by(pond) %>%
+              filter(!any(year == set.yr)) %>%
+              select(geometry) %>% 
+              unique(),
+            shape=13, size=6, color="black", inherit.aes = F) +
+    geom_sf(data = sp.ne.noinf, aes(size = Ne, fill = Ne), shape=21, inherit.aes = F)
+  
+  #add infinite ponds
+  if (plot_inf == FALSE) { #place holder
+    p.ne <- p.ne +
+      geom_sf(data = sp.ne.inf, aes(shape=Ne), size=5, stroke=2, color="black", inherit.aes = F) +
+      scale_shape_manual(values = c(8))
+  }
+  if (plot_inf == TRUE) { #large point
+    p.ne <- p.ne +
+      geom_sf(data = sp.ne.inf, aes(color=Ne), shape=16, size=16, alpha=1, inherit.aes = F) +
+      geom_sf(data = sp.ne.inf, shape=21, color = "black", fill=NA, size=16, alpha=1, inherit.aes = F) +
+      scale_color_manual(values=c("white"))
+  }
+
+  #add aesthetics and titles
+  p.ne <- p.ne +
+    ggtitle(paste0(set.yr, " Effective Population Size")) +
+    ggaztf_theme +
+    theme(legend.position = "bottom") +
+    guides(color = guide_legend(title = NULL, order = 2, override.aes = list(shape=21, size=16, fill="white", color="black", alpha=1), label.position = "bottom"), 
+           size = guide_legend(order=1, label.position = "bottom"), 
+           fill = guide_legend(order=1, label.position = "bottom"),
+           shape = guide_legend(title = NULL, order = 2, label.position = "bottom"))
+  if (add_legend == FALSE) {
+    p.ne <- p.ne +
+      theme(legend.position = "none")
+  }
+  return(p.ne)
+}
+
+p14 <- plot_ne(sp.ne, "2014", add_legend = F)
+p19 <- plot_ne(sp.ne, "2019", add_legend = F)
+p21 <- plot_ne(sp.ne, "2021", add_legend = T)
+
+# p14
+# p19
+# p21
+
+ggsave(filename = paste0(PATH, "/figures/Ne_map_2014.png"), plot = p14, width = 6.8, height = 6.7)
+ggsave(filename = paste0(PATH, "/figures/Ne_map_2019.png"), plot = p19, width = 6.3, height = 6.5)
+ggsave(filename = paste0(PATH, "/figures/Ne_map_2021.png"), plot = p21, width = 6.3, height = 6.5)
+
+
+sp.dne <- sp.dne %>% 
+  mutate(sy14_19 = if_else(d14_19 > 0, "pos", "neg"),
+         sy19_21 = if_else(d19_21 > 0, "pos", "neg"),
+         sy14_21 = if_else(d14_21 > 0, "pos", "neg")) %>%
+  mutate(across(starts_with("d"), ~ abs(.x)))
+
+blupal <- colorRampPalette(brewer.pal(9, "YlOrRd")[4:9])
+redpal <- colorRampPalette(brewer.pal(9, "PuBu")[4:9])
+maxdne <- round(max(sp.dne %>% select(starts_with("d")) %>% st_drop_geometry(), na.rm = T),0)
+mindne <- round(min(sp.dne %>% select(starts_with("d")) %>% st_drop_geometry(), na.rm = T),0)
+
+ggdne_theme <- list(
+  coord_sf(datum = sf::st_crs(sp.dne)),
+  scale_color_gradientn(colors = blupal(100), limits=c(mindne-9, maxdne+9)),
+  scale_fill_gradientn(colors = redpal(100),  limits=c(mindne-9, maxdne+9)),
+  scale_size_continuous(range = c(2, 12), guide = "legend",
+                        limits=c(mindne-9, maxdne+9),
+                        breaks = c(0, 500, 1000, 1500)),
+  labs(x = "Longitude", y = "Latitude"),
+  theme(panel.background = element_blank(),
+        panel.border = element_rect(fill=NA, color = "black"),
+        legend.key = element_blank(),
+        legend.position = "bottom",
+        legend.box = "vertical",
+        legend.text = element_text(size=15),
+        legend.title = element_text(size = 15),
+        plot.title = element_text(face = "bold", size = 18),
+        axis.title = element_text(size=15),
+        axis.text = element_text(size=13)
+        ),
+  guides(fill = guide_legend(title = "pos. % change", order = 2, override.aes = list(size=c(2,7,9,12), shape=21, fill=redpal(4), color="black"), label.position="bottom"),
+         color = guide_legend(title = "neg. % change", order = 1, label=F,  override.aes = list(size=c(2,7,9,12), shape=21, fill=blupal(4), color="black")),
+         size = "none")
+  )
+
+ne_change_plot <- function(ne_dat, d_years, plot_inf = FALSE) {
+  if (!d_years %in% c("14_19", "19_21", "14_21")) {
+    stop("Incorrect year input. Must be 'd14_19', 'd19_21', or 'd14_21'")
+  }
+  
+  d.var <- paste0("d", d_years)
+  d.var <- enquo(d.var)
+  s.var <- enquo(paste0("sy", d_years))
+  
+  p.dne <- ggmap(az.base) +
+    geom_sf(data = sp.dne %>% filter(is.na(!!rlang::sym(d.var))), shape=13, size=5, color="black", inherit.aes = F) +
+    # geom_sf(data = sp.dne %>% filter(get({{s.var}}) == 'pos'), aes_string(size = d.var, fill = d.var), shape=21, color="transparent", inherit.aes = F) +
+    # geom_sf(data = sp.dne %>% filter(get({{s.var}}) == 'neg'), aes(size = d14_19, color = d14_19), shape=16, inherit.aes = F) +
+    # geom_sf(data = sp.dne %>% filter(!is.na(get({{d.var}}))), aes(size = d14_19), shape=21, fill=NA, inherit.aes = F) +
+    # geom_sf(data = sp.ne.inf %>% mutate(Ne = "Inf"), aes(color=Ne), shape=16, size=12, alpha=1, inherit.aes = F) +
+    ggtitle("2014 to 2019 Ne Change") +
+    ggdne_theme
+  
+  return(p.dne)
+}
+p14_19 <- ggmap(az.base) +
+  geom_sf(data = sp.dne %>% filter(is.na(d14_19)), shape=13, size=5, color="black", inherit.aes = F) +
+  geom_sf(data = sp.dne %>% filter(sy14_19 == 'pos'), aes(size = d14_19, fill = d14_19), shape=21, color="transparent", inherit.aes = F) +
+  geom_sf(data = sp.dne %>% filter(sy14_19 == 'neg'), aes(size = d14_19, color = d14_19), shape=16, inherit.aes = F) +
+  geom_sf(data = sp.dne %>% filter(!is.na(d14_19)), aes(size = d14_19), shape=21, fill=NA, inherit.aes = F) +
+  # geom_sf(data = sp.ne.inf %>% mutate(Ne = "Inf"), aes(color=Ne), shape=16, size=12, alpha=1, inherit.aes = F) +
+  ggtitle("2014 to 2019 Ne Change") +
+  ggdne_theme
+# p14_19
+
+p19_21 <- ggmap(az.base) +
+  geom_sf(data = sp.dne %>% filter(is.na(d19_21)), shape=13, size=5, color="black", inherit.aes = F) +
+  geom_sf(data = sp.dne %>% filter(sy19_21 == 'pos'), aes(size = d19_21, fill = d19_21), shape=21, color="transparent", inherit.aes = F) +
+  geom_sf(data = sp.dne %>% filter(sy19_21 == 'neg'), aes(size = d19_21, color = d19_21), shape=16, inherit.aes = F) +
+  geom_sf(data = sp.dne %>% filter(!is.na(d19_21)), aes(size = d19_21), shape=21, fill=NA, inherit.aes = F) +
+  # geom_sf(data = sp.ne.inf %>% mutate(Ne = "Inf"), aes(color=Ne), shape=16, size=12, alpha=1, inherit.aes = F) +
+  ggtitle("2019 to 2021 Ne Change") +
+  ggdne_theme
+# p19_21
+
+p14_21 <- ggmap(az.base) +
+  geom_sf(data = sp.dne %>% filter(is.na(d14_21)), shape=13, size=5, color="black", inherit.aes = F) +
+  geom_sf(data = sp.dne %>% filter(sy14_21 == 'pos'), aes(size = d14_21, fill = d14_21), shape=21, color="transparent", inherit.aes = F) +
+  geom_sf(data = sp.dne %>% filter(sy14_21 == 'neg'), aes(size = d14_21, color = d14_21), shape=16, inherit.aes = F) +
+  geom_sf(data = sp.dne %>% filter(!is.na(d14_21)), aes(size = d14_21), shape=21, fill=NA, inherit.aes = F) +
+  # geom_sf(data = sp.ne.inf %>% mutate(Ne = "Inf"), aes(color=Ne), shape=16, size=12, alpha=1, inherit.aes = F) +
+  ggtitle("2014 to 2021 Ne Change") +
+  ggdne_theme
+# p14_21
+# 
+# ggsave(filename = paste0(PATH, "/figures/Ne_change_map_14-19.png"), plot = p14_19)
+# ggsave(filename = paste0(PATH, "/figures/Ne_change_map_19-21.png"), plot = p19_21)
+# ggsave(filename = paste0(PATH, "/figures/Ne_change_map_14-21.png"), plot = p14_21)
+```
+
+\begin{figure}[!ht]
+  \centering
+  \includegraphics[width=0.4\textwidth]{"/home/chloe9mo/Documents/Projects/temporal_aztreefrog/figures/Ne_map_2014.png"}
+  \includegraphics[width=0.4\textwidth]{"/home/chloe9mo/Documents/Projects/temporal_aztreefrog/figures/Ne_map_2019.png"}
+  \includegraphics[width=0.4\textwidth]{"/home/chloe9mo/Documents/Projects/temporal_aztreefrog/figures/Ne_map_2021.png"}
+  \caption{Individual year effective population size (LDNe).}
+\end{figure}
+
+\begin{figure}[!hb]
+  \centering
+  \includegraphics[width=0.4\textwidth]{"/home/chloe9mo/Documents/Projects/temporal_aztreefrog/figures/Ne_change_map_14-19.png"}
+  \includegraphics[width=0.4\textwidth]{"/home/chloe9mo/Documents/Projects/temporal_aztreefrog/figures/Ne_change_map_19-21.png"}
+  \includegraphics[width=0.4\textwidth]{"/home/chloe9mo/Documents/Projects/temporal_aztreefrog/figures/Ne_change_map_14-21.png"}
+  \caption{Effective population size difference between years.}
+\end{figure}
+
+## Ne vs Sample Size  
+
+``` {r, echo=F, eval=F}
+tot <- read.csv(paste0(PATH,"/multiyear_hywr_tracking.csv")) %>% 
+  filter(!Pond.Number %in% c(2, 5, 11, 12, 13, 14, 15)) %>%
+  mutate(Pond.Number = case_when(Pond.Number == "1" ~ 1,
+                         Pond.Number == "4" ~ 2,
+                         Pond.Number == "3" ~ 3,
+                         Pond.Number == "6" ~ 4, 
+                         Pond.Number == "7" ~ 5, 
+                         Pond.Number == "8" ~ 6, 
+                         Pond.Number == "9" ~ 7, 
+                         Pond.Number == "10" ~ 8, 
+                         Pond.Number == "16" ~ 9))
+tot14 <- tot %>% filter(Year.Sampled == '2014')
+tot18 <- tot %>% filter(Year.Sampled == '2018') %>% mutate(Year.Sampled = 2019)
+tot <- tot %>% filter(Plate_PM1 != "") %>% filter(Plate_PM1 != "--")
+tot <- bind_rows(tot, tot14, tot18)
+
+nosib <- tot %>%
+  filter(Sibling.Action == "keep") %>% 
+  select(Year.Sampled, Pond.Number) %>%
+  count(Year.Sampled, Pond.Number) %>%
+  pivot_wider(id_cols=Pond.Number, names_from = Year.Sampled, values_from=n) %>%
+  replace(is.na(.), 0) %>%
+  rename(ns2014 = '2014',
+         ns2019 = '2019',
+         ns2021 = '2021',
+         pop = Pond.Number) %>%
+  filter(pop %in% ns$pop)
+
+coord <- coord %>%
+  select(-year_pop) %>%
+  left_join(nosib, by="pop") %>%
+  mutate(pop = as.factor(as.numeric(pop))) %>%
+  left_join(dNet, by=c('pop'='pond')) %>%
+  distinct()
+ns <- coord %>%
+  select(pop, matches('2014|2019|2021'))
+
+sumtot <- tot %>%
+  select(Year.Sampled, Pond.Number) %>%
+  count(Year.Sampled, Pond.Number) %>%
+  pivot_wider(id_cols=Pond.Number, names_from = Year.Sampled, values_from=n) %>%
+  replace(is.na(.), 0) %>%
+  rename(t2014 = '2014',
+         t2019 = '2019',
+         t2021 = '2021',
+         pop = Pond.Number) %>%
+  filter(pop %in% ns$pop) %>%
+  mutate(pop = as.factor(as.numeric(pop)))
+
+ns <- left_join(ns, sumtot, by='pop') #%>% st_drop_geometry()
+ns[is.na(ns)] <- 0
+names(ns) <- c("pop", "y2014_NoSibs", "y2019_NoSibs", "y2021_NoSibs", "y2014_Ne", "y2019_Ne", "y2021_Ne", "y2014_Sibs", "y2019_Sibs", "y2021_Sibs")
+
+gns <- ns %>% pivot_longer(cols = -pop) %>%
+  mutate(year = gsub("\\D+", "", name),
+         type = gsub(".*_", "", name)) %>%
+  select(-name) %>% 
+  distinct() %>%
+  pivot_wider(names_from = type, values_from = value) %>%
+  mutate(ind_lost = Sibs - NoSibs)
+write.csv(gns, file=paste0(PATH,"/results_tables/sample_count_summary.csv"), row.names = F)
+
+sne.theme <- list(
+  scale_color_manual(values = c("#CCCCCC", "#999999", "#333333"), aesthetics = "color"),
+  scale_x_continuous(breaks = c(10, 20, 30, 40, 50), limits = c(7, 51)),
+  theme(panel.background = element_blank(),
+        axis.line.x = element_line(color = "black"),
+        axis.line.y = element_line(color = "black"),
+        panel.grid = element_line(color="#E5E4E2"),
+        axis.title = element_text(size = 16),
+        axis.text = element_text(size = 14))
+)
+
+ps <- ggplot(gns %>% filter(between(Ne, 1, 400))) +
+# ggplot(gns %>% filter(between(Ne, 0, 400))) +
+  geom_point(aes(x=Sibs, y=Ne, color=year)) +
+  geom_smooth(method = "lm", formula='y~x', aes(x=Sibs, y=Ne, color=year), se=F) +
+  geom_smooth(method = "lm", formula='y~x', aes(x=Sibs, y=Ne), linetype="dashed", color="red", se=F) +
+  labs(x="Siblings Removed", y="Effective Population Size") +
+  sne.theme +
+  theme(legend.position = "none")
+
+pns <- ggplot(gns %>% filter(between(Ne, 1, 400))) +
+# ggplot(gns %>% filter(between(Ne, 0, 400))) +
+  geom_point(aes(x=NoSibs, y=Ne, color=year)) +
+  geom_smooth(method = "lm", formula='y~x', aes(x=NoSibs, y=Ne, color=year), se=F) +
+  geom_smooth(method = "lm", formula='y~x', aes(x=NoSibs, y=Ne), linetype="dashed", color="red", se=F) +
+  labs(x="Siblings Not Removed", y="") +
+  sne.theme
+
+plot_grid(ps, pns, align = "h", rel_widths = c(1, 1.3))
+ggsave(paste0(PATH, "/figures/NevsSampleSize.png"), width = 8, height = 4)
+# ggsave(filename = paste0(PATH,"/figures/NevsSibs.png"), plot = ps, width = 5, height = 5)
+# ggsave(filename = paste0(PATH,"/figures/NevsNoSibs.png"), plot = pns, width = 5, height = 5)
+print(cor.test(gns$NoSibs, gns$Ne, method = "pearson")) #all
+print(cor.test(gns$Sibs, gns$Ne, method = "pearson")) #all
+print(cor.test((gns %>% filter(year == 2014))$Sibs, (gns %>% filter(year == 2014))$Ne, method = "pearson"))
+print(cor.test((gns %>% filter(year == 2019))$Sibs, (gns %>% filter(year == 2019))$Ne, method = "pearson"))
+print(cor.test((gns %>% filter(year == 2021))$Sibs, (gns %>% filter(year == 2021))$Ne, method = "pearson"))
+print(cor.test((gns %>% filter(year == 2014))$NoSibs, (gns %>% filter(year == 2014))$Ne, method = "pearson"))
+print(cor.test((gns %>% filter(year == 2019))$NoSibs, (gns %>% filter(year == 2019))$Ne, method = "pearson"))
+print(cor.test((gns %>% filter(year == 2021))$NoSibs, (gns %>% filter(year == 2021))$Ne, method = "pearson"))
+```
+
+\begin{figure}[ht!]
+  \centering
+  \includegraphics[width=0.4\textwidth]{"/home/chloe9mo/Documents/Projects/temporal_aztreefrog/figures/NevsNoSibs.png"}
+  \includegraphics[width=0.4\textwidth]{"/home/chloe9mo/Documents/Projects/temporal_aztreefrog/figures/NevsSibs.png"}
+  \caption{Relationship between effective population size and sample size.}
+\end{figure}
+
+# Inbreeding estimates  
+
+``` {r inbreeding, echo=F, message=F, eval=F}
+Fbar <- vector("list", length = length(ind.list))
+
+#calc likelihood based estimation of inbreeding
+for (i in 1:length(ind.list)) {
+
+  temp <- inbreeding(ind.list[[i]], N=100)
+  Fbar[[i]] <- sapply(temp, mean)
+
+}
+
+#compile into single dataframe
+Fbar.t <- Fbar[[1]] %>%
+  as.data.frame() %>%
+  rownames_to_column("sample") %>%
+  rename(Fbar = '.') %>%
+  mutate(group = ind.names[[1]])
+for (i in 2:length(Fbar)) {
+  temp <- Fbar[[i]] %>%
+    as.data.frame() %>%
+    rownames_to_column("sample") %>%
+    rename(Fbar = '.') %>%
+    mutate(group = ind.names[[i]])
+  Fbar.t <- bind_rows(Fbar.t, temp)
+}
+
+Fbar.t <- Fbar.t %>% 
+  group_by(group) %>%
+  mutate(n4 = sum(Fbar > 0.4))
+
+ip <- ggplot(Fbar.t %>% filter(!grepl("All Yrs", group)), aes(x=Fbar)) +
+  geom_histogram() +
+  geom_vline(aes(xintercept=0.4), color="red", linetype="dashed") +
+  facet_wrap(~ group) +
+  theme_bw() +
+  geom_text(data=Fbar.t %>% select(group, n4) %>% distinct() %>% filter(!grepl("All Yrs", group)), 
+            aes(x=0.6, y=35, label=paste0("N > 0.4 = \n", n4)))
+
+ggsave(paste0(PATH, "/figures/IndYear_InbreedingHist.png"), plot = ip)
+
+
+table((Fbar.t %>% filter(Fbar > 0.4, !grepl("All Yrs", group)) %>% left_join(aztf %>% select(ID, pop, year), by = c("sample" = "ID")))$pop)
+
+
+#look at plot of likelihood distribution
+# F <- inbreeding(ind.list[[i]], res.type="function")[which(Fbar>0.4)]
+# 
+# plot(F$`2014-MCM-0032`, main=paste("Inbreeding of individual",names(F)),
+# xlab="Inbreeding (F)", ylab="Probability density")
+# plot(F$`2014-MCM-0056`, add=T, col="red")
+# plot(F$`2014-MCM-0296`, add=T, col="blue")
+```
+
+\begin{figure}[hb!]
+  \centering
+  \includegraphics[width=0.6\textwidth]{"/home/chloe9mo/Documents/Projects/temporal_aztreefrog/figures/IndYear_InbreedingHist.png"}
+  \caption{Estimate of individuals with high likelihood of inbreeding. Fbar > 0.4 indicates likely inbred. Population 8 most consistently has degree of inbreeding.}
+\end{figure}
+
+\bigbreak
+# AMOVA
+```{r AMOVA, echo=F, message=F, eval=FALSE}
+ind.list[[1]]@other$year <- aztf$year 
+ind.list[[1]]@other$pop <- aztf$pop
+strata(ind.list[[1]]) <- data.frame(other(ind.list[[1]])$year, other(ind.list[[1]])$pop) #year will be first group, pop is sub group
+nameStrata(ind.list[[1]]) <- ~year/pop #rename
+
+#amova
+amova <- poppr::poppr.amova(ind.list[[1]], hier = ~year/pop, method = "ade4")
+amova
+
+#test for significance
+system.time(
+amova.test <- ade4::randtest(amova, nrepet = 10)
+)
+```
+``` {r AMOVA read, echo=F, message=F}
+amova.test <- readRDS(paste0(PATH, "/AMOVA_All_10K.rds"))
+amova.test
+plot(amova.test)
+```
